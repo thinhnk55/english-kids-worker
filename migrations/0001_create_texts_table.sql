@@ -16,14 +16,14 @@ CREATE TABLE IF NOT EXISTS texts_texts_mapping (
   id TEXT PRIMARY KEY NOT NULL,
   sentence_id TEXT NOT NULL,
   lexical_id TEXT NOT NULL,
-  position INTEGER NOT NULL CHECK (position >= 0),
   token_indexes TEXT NOT NULL CHECK (
     json_valid(token_indexes)
     AND json_type(token_indexes) = 'array'
     AND json_array_length(token_indexes) > 0
   ),
   FOREIGN KEY (sentence_id) REFERENCES texts(id) ON DELETE CASCADE,
-  FOREIGN KEY (lexical_id) REFERENCES texts(id) ON DELETE CASCADE
+  FOREIGN KEY (lexical_id) REFERENCES texts(id) ON DELETE CASCADE,
+  CONSTRAINT uq_sentence_token_indexes UNIQUE (sentence_id, token_indexes)
 );
 
 CREATE INDEX IF NOT EXISTS idx_texts_texts_mapping_sentence ON texts_texts_mapping(sentence_id);
