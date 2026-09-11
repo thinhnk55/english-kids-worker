@@ -5,3 +5,5 @@ CREATE TABLE IF NOT EXISTS texts (
     json_valid(translations) AND json_type(translations) = 'object'
   )
 );
+
+CREATE INDEX IF NOT EXISTS idx_texts_text ON texts(text);
