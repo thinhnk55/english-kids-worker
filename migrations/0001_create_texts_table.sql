@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS texts (
   ),
   translations TEXT NOT NULL DEFAULT '{}' CHECK (
     json_valid(translations) AND json_type(translations) = 'object'
+  ),
+  metadata TEXT NOT NULL DEFAULT '{}' CHECK (
+    json_valid(metadata) AND json_type(metadata) = 'object'
   )
 );
 
@@ -21,9 +24,10 @@ CREATE TABLE IF NOT EXISTS texts_texts_mapping (
     AND json_type(token_indexes) = 'array'
     AND json_array_length(token_indexes) > 0
   ),
+  display_order INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (sentence_id) REFERENCES texts(id) ON DELETE CASCADE,
   FOREIGN KEY (lexical_id) REFERENCES texts(id) ON DELETE CASCADE,
-  CONSTRAINT uq_sentence_token_indexes UNIQUE (sentence_id, token_indexes)
+  CONSTRAINT uq_sentence_lexical_tokens UNIQUE (sentence_id, lexical_id, token_indexes)
 );
 
 CREATE INDEX IF NOT EXISTS idx_texts_texts_mapping_sentence ON texts_texts_mapping(sentence_id);
