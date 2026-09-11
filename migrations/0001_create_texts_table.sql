@@ -7,9 +7,6 @@ CREATE TABLE IF NOT EXISTS texts (
   ),
   translations TEXT NOT NULL DEFAULT '{}' CHECK (
     json_valid(translations) AND json_type(translations) = 'object'
-  ),
-  metadata TEXT NOT NULL DEFAULT '{}' CHECK (
-    json_valid(metadata) AND json_type(metadata) = 'object'
   )
 );
 
