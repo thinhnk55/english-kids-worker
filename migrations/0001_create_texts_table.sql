@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS texts (
 
 CREATE INDEX IF NOT EXISTS idx_texts_text ON texts(text);
 
-CREATE TABLE IF NOT EXISTS sentence_lexicals (
+CREATE TABLE IF NOT EXISTS sentence_lexical (
   id TEXT PRIMARY KEY NOT NULL,
   sentence_id TEXT NOT NULL,
   lexical_id TEXT NOT NULL,
@@ -30,5 +30,5 @@ CREATE TABLE IF NOT EXISTS sentence_lexicals (
   CONSTRAINT uq_sentence_lexical_tokens UNIQUE (sentence_id, lexical_id, token_indexes)
 );
 
-CREATE INDEX IF NOT EXISTS idx_sentence_lexicals_sentence ON sentence_lexicals(sentence_id);
-CREATE INDEX IF NOT EXISTS idx_sentence_lexicals_lexical ON sentence_lexicals(lexical_id);
+CREATE INDEX IF NOT EXISTS idx_sentence_lexical_sentence ON sentence_lexical(sentence_id);
+CREATE INDEX IF NOT EXISTS idx_sentence_lexical_lexical ON sentence_lexical(lexical_id);
