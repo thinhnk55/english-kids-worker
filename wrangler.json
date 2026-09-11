@@ -3,6 +3,7 @@
 	"compatibility_date": "2026-08-27",
 	"main": "src/index.ts",
 	"name": "english-kids-worker",
+	"account_id": "fb472c171bfa2db93da629840792bc72",
 	"upload_source_maps": true,
 	"observability": {
 		"enabled": true
@@ -21,7 +22,7 @@
 		{
 			"binding": "DB",
 			"database_name": "english-kids-db",
-			"database_id": "00000000-0000-0000-0000-000000000000"
+			"database_id": "42e421aa-1efe-4323-8217-dc0106bb16ae"
 		}
 	]
 }
