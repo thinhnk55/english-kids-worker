@@ -16,6 +16,10 @@
 		{
 			"pattern": "english-kids-api.hocnhe.com",
 			"custom_domain": true
+		},
+		{
+			"pattern": "english-kids-bucket.hocnhe.com",
+			"custom_domain": true
 		}
 	],
 	"r2_buckets": [

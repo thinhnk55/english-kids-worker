@@ -1,5 +1,6 @@
 import { routeAdminRequest } from './routes/admin.ts';
 import { routeUserRequest } from './routes/user.ts';
+import { handleServeR2Asset } from './features/texts/media.ts';
 import { requireAdmin, requireUser } from './utils/auth.ts';
 import { getCorsOrigin } from './utils/cors.ts';
 import { corsResponse, errorResponse } from './utils/response.ts';
@@ -13,6 +14,15 @@ export default {
     if (!cors.allowed) return errorResponse(403, 'FORBIDDEN', 'Origin không được phép', '');
 
     if (request.method === 'OPTIONS') return corsResponse(origin);
+
+    // Serve static R2 assets (custom domain english-kids-bucket.hocnhe.com or path /text/* or /assets/*)
+    if (
+      (request.method === 'GET' || request.method === 'HEAD') &&
+      (url.hostname === 'english-kids-bucket.hocnhe.com' || url.pathname.startsWith('/text/') || url.pathname.startsWith('/assets/'))
+    ) {
+      const key = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
+      return handleServeR2Asset(request, env, key, origin);
+    }
 
     if (url.pathname === '/' || url.pathname === '/info') {
       return new Response(JSON.stringify({

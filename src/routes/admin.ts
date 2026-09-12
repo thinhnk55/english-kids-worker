@@ -29,10 +29,12 @@ import {
   handleAddTextAudio,
   handleAddTextImage,
   handleAddTextVideo,
+  handleDeleteR2Asset,
   handleDeleteTextAudio,
   handleDeleteTextImage,
   handleDeleteTextVideo,
   handleUpdateTextLexicals,
+  handleUploadR2Asset,
 } from '../features/texts/media.ts';
 import { errorResponse } from '../utils/response.ts';
 
@@ -52,6 +54,13 @@ export async function routeAdminRequest(
     return new Response(JSON.stringify({ status: 'ok', scope: 'admin' }), {
       headers: { 'content-type': 'application/json' },
     });
+  }
+
+  // Upload Route
+  if (path === '/upload') {
+    if (request.method === 'POST') return handleUploadR2Asset(request, env, origin);
+    if (request.method === 'DELETE') return handleDeleteR2Asset(request, env, origin);
+    return methodNotAllowed(origin);
   }
 
   // Taxonomy Routes
