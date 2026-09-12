@@ -82,34 +82,10 @@ export async function getLexicalDetails(env: Env, lexicalId: string) {
   const lexicalRow = await getLexicalById(env, lexicalId);
   if (!lexicalRow) return null;
 
-  const [audios, images, videos, mappedSentences] = await Promise.all([
+  const [audios, images, videos] = await Promise.all([
     env.DB.prepare('SELECT id, voice, url FROM lexical_audio WHERE lexical_id = ?').bind(lexicalId).all<LexicalAudioRow>(),
     env.DB.prepare('SELECT id, url FROM lexical_image WHERE lexical_id = ?').bind(lexicalId).all<LexicalMediaRow>(),
     env.DB.prepare('SELECT id, url FROM lexical_video WHERE lexical_id = ?').bind(lexicalId).all<LexicalMediaRow>(),
-    env.DB.prepare(`
-      SELECT
-        sl.id AS mapping_id,
-        sl.sentence_id,
-        sl.token_indexes,
-        sl.position AS display_order,
-        s.text,
-        s.phonemes,
-        s.tokens,
-        s.translations
-      FROM sentence_lexicals sl
-      JOIN sentences s ON s.id = sl.sentence_id
-      WHERE sl.lexical_id = ?
-      ORDER BY sl.sentence_id ASC, sl.position ASC
-    `).bind(lexicalId).all<{
-      mapping_id: string;
-      sentence_id: string;
-      token_indexes: string;
-      display_order: number;
-      text: string;
-      phonemes: string | null;
-      tokens: string;
-      translations: string;
-    }>(),
   ]);
 
   return {
@@ -119,16 +95,6 @@ export async function getLexicalDetails(env: Env, lexicalId: string) {
       images: images.results,
       videos: videos.results,
     },
-    sentences: mappedSentences.results.map(row => ({
-      mapping_id: row.mapping_id,
-      sentence_id: row.sentence_id,
-      text: row.text,
-      phonemes: row.phonemes,
-      tokens: parseJsonArray(row.tokens),
-      translations: parseJsonObject(row.translations),
-      token_indexes: parseJsonArray(row.token_indexes),
-      display_order: row.display_order,
-    })),
   };
 }
 
