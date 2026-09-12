@@ -201,7 +201,7 @@ export async function handleGetTaxonomyTerms(env: Env, origin: string, taxonomyI
   }
 }
 
-export async function getTextTerms(env: Env, textId: string) {
+export async function getSentenceTerms(env: Env, sentenceId: string) {
   const rows = await env.DB.prepare(`
     SELECT
       term.id,
@@ -217,12 +217,12 @@ export async function getTextTerms(env: Env, textId: string) {
       taxonomy.description AS taxonomy_description,
       taxonomy.translations AS taxonomy_translations,
       taxonomy.selection_mode
-    FROM text_terms assigned
+    FROM sentence_terms assigned
     JOIN taxonomy_terms term ON term.id = assigned.term_id
     JOIN taxonomies taxonomy ON taxonomy.id = term.taxonomy_id
-    WHERE assigned.text_id = ?
+    WHERE assigned.sentence_id = ?
     ORDER BY taxonomy.name ASC, term.position ASC, term.id ASC
-  `).bind(textId).all<TaxonomyTermRow & {
+  `).bind(sentenceId).all<TaxonomyTermRow & {
     taxonomy_code: string;
     taxonomy_name: string;
     taxonomy_description: string | null;
@@ -242,6 +242,50 @@ export async function getTextTerms(env: Env, textId: string) {
     }),
   }));
 }
+
+export async function getLexicalTerms(env: Env, lexicalId: string) {
+  const rows = await env.DB.prepare(`
+    SELECT
+      term.id,
+      term.taxonomy_id,
+      term.parent_id,
+      term.code,
+      term.name,
+      term.description,
+      term.translations,
+      term.position,
+      taxonomy.code AS taxonomy_code,
+      taxonomy.name AS taxonomy_name,
+      taxonomy.description AS taxonomy_description,
+      taxonomy.translations AS taxonomy_translations,
+      taxonomy.selection_mode
+    FROM lexical_terms assigned
+    JOIN taxonomy_terms term ON term.id = assigned.term_id
+    JOIN taxonomies taxonomy ON taxonomy.id = term.taxonomy_id
+    WHERE assigned.lexical_id = ?
+    ORDER BY taxonomy.name ASC, term.position ASC, term.id ASC
+  `).bind(lexicalId).all<TaxonomyTermRow & {
+    taxonomy_code: string;
+    taxonomy_name: string;
+    taxonomy_description: string | null;
+    taxonomy_translations: string;
+    selection_mode: 'single' | 'multiple';
+  }>();
+
+  return rows.results.map(row => ({
+    ...parseTerm(row),
+    taxonomy: parseTaxonomy({
+      id: row.taxonomy_id,
+      code: row.taxonomy_code,
+      name: row.taxonomy_name,
+      description: row.taxonomy_description,
+      translations: row.taxonomy_translations,
+      selection_mode: row.selection_mode,
+    }),
+  }));
+}
+
+export const getTextTerms = getSentenceTerms;
 
 export async function handleListTaxonomies(request: Request, env: Env, origin: string): Promise<Response> {
   try {
@@ -312,16 +356,16 @@ export async function handleUpdateTaxonomy(request: Request, env: Env, origin: s
     if (!existing) return errorResponse(404, 'NOT_FOUND', undefined, origin);
     if (input.selection_mode === 'single') {
       const conflict = await env.DB.prepare(`
-        SELECT assigned.text_id
-        FROM text_terms assigned
+        SELECT assigned.sentence_id
+        FROM sentence_terms assigned
         JOIN taxonomy_terms term ON term.id = assigned.term_id
         WHERE term.taxonomy_id = ?
-        GROUP BY assigned.text_id
+        GROUP BY assigned.sentence_id
         HAVING COUNT(*) > 1
         LIMIT 1
-      `).bind(existing.id).first<{ text_id: string }>();
+      `).bind(existing.id).first<{ sentence_id: string }>();
       if (conflict) {
-        return errorResponse(409, 'CONFLICT', `Text ${conflict.text_id} đang có nhiều term; chưa thể đổi taxonomy sang single`, origin);
+        return errorResponse(409, 'CONFLICT', `Sentence ${conflict.sentence_id} đang có nhiều term; chưa thể đổi taxonomy sang single`, origin);
       }
     }
     await env.DB.prepare(`
@@ -450,17 +494,29 @@ export async function handleDeleteTaxonomyTerm(env: Env, origin: string, id: str
   }
 }
 
-export async function handleGetTextTerms(env: Env, origin: string, textId: string): Promise<Response> {
+export async function handleGetSentenceTerms(env: Env, origin: string, sentenceId: string): Promise<Response> {
   try {
-    const textRow = await env.DB.prepare('SELECT id FROM texts WHERE id = ?').bind(textId).first<{ id: string }>();
-    if (!textRow) return errorResponse(404, 'NOT_FOUND', 'Text không tồn tại', origin);
-    return successResponse(200, 'SUCCESS', await getTextTerms(env, textId), origin);
+    const row = await env.DB.prepare('SELECT id FROM sentences WHERE id = ?').bind(sentenceId).first<{ id: string }>();
+    if (!row) return errorResponse(404, 'NOT_FOUND', 'Sentence không tồn tại', origin);
+    return successResponse(200, 'SUCCESS', await getSentenceTerms(env, sentenceId), origin);
   } catch (error) {
     return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
   }
 }
 
-export async function handleReplaceTextTerms(request: Request, env: Env, origin: string, textId: string): Promise<Response> {
+export async function handleGetLexicalTerms(env: Env, origin: string, lexicalId: string): Promise<Response> {
+  try {
+    const row = await env.DB.prepare('SELECT id FROM lexicals WHERE id = ?').bind(lexicalId).first<{ id: string }>();
+    if (!row) return errorResponse(404, 'NOT_FOUND', 'Lexical không tồn tại', origin);
+    return successResponse(200, 'SUCCESS', await getLexicalTerms(env, lexicalId), origin);
+  } catch (error) {
+    return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
+  }
+}
+
+export const handleGetTextTerms = handleGetSentenceTerms;
+
+export async function handleReplaceSentenceTerms(request: Request, env: Env, origin: string, sentenceId: string): Promise<Response> {
   const body = await readBody(request, origin);
   if (isResponse(body)) return body;
   if (!Array.isArray(body.term_ids) || body.term_ids.length > 50) {
@@ -471,8 +527,8 @@ export async function handleReplaceTextTerms(request: Request, env: Env, origin:
     return errorResponse(400, 'VALIDATION_ERROR', 'term_ids phải là các id không rỗng và không trùng nhau', origin);
   }
   try {
-    const textRow = await env.DB.prepare('SELECT id FROM texts WHERE id = ?').bind(textId).first<{ id: string }>();
-    if (!textRow) return errorResponse(404, 'NOT_FOUND', 'Text không tồn tại', origin);
+    const row = await env.DB.prepare('SELECT id FROM sentences WHERE id = ?').bind(sentenceId).first<{ id: string }>();
+    if (!row) return errorResponse(404, 'NOT_FOUND', 'Sentence không tồn tại', origin);
     if (termIds.length > 0) {
       const placeholders = termIds.map(() => '?').join(', ');
       const rows = await env.DB.prepare(`
@@ -486,20 +542,66 @@ export async function handleReplaceTextTerms(request: Request, env: Env, origin:
         return errorResponse(404, 'NOT_FOUND', { term_ids: termIds.filter(id => !found.has(id)) }, origin);
       }
       const singleTaxonomies = new Set<string>();
-      for (const row of rows.results) {
-        if (row.selection_mode === 'single' && singleTaxonomies.has(row.taxonomy_id)) {
-          return errorResponse(409, 'CONFLICT', `Taxonomy ${row.taxonomy_id} chỉ cho phép chọn một term`, origin);
+      for (const r of rows.results) {
+        if (r.selection_mode === 'single' && singleTaxonomies.has(r.taxonomy_id)) {
+          return errorResponse(409, 'CONFLICT', `Taxonomy ${r.taxonomy_id} chỉ cho phép chọn một term`, origin);
         }
-        if (row.selection_mode === 'single') singleTaxonomies.add(row.taxonomy_id);
+        if (r.selection_mode === 'single') singleTaxonomies.add(r.taxonomy_id);
       }
     }
     await env.DB.batch([
-      env.DB.prepare('DELETE FROM text_terms WHERE text_id = ?').bind(textId),
-      ...termIds.map(termId => env.DB.prepare('INSERT INTO text_terms (text_id, term_id) VALUES (?, ?)').bind(textId, termId)),
+      env.DB.prepare('DELETE FROM sentence_terms WHERE sentence_id = ?').bind(sentenceId),
+      ...termIds.map(termId => env.DB.prepare('INSERT INTO sentence_terms (sentence_id, term_id) VALUES (?, ?)').bind(sentenceId, termId)),
     ]);
-    return successResponse(200, 'UPDATED', await getTextTerms(env, textId), origin);
+    return successResponse(200, 'UPDATED', await getSentenceTerms(env, sentenceId), origin);
   } catch (error) {
     if (isConstraint(error)) return errorResponse(409, 'CONFLICT', error instanceof Error ? error.message : undefined, origin);
     return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
   }
 }
+
+export async function handleReplaceLexicalTerms(request: Request, env: Env, origin: string, lexicalId: string): Promise<Response> {
+  const body = await readBody(request, origin);
+  if (isResponse(body)) return body;
+  if (!Array.isArray(body.term_ids) || body.term_ids.length > 50) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'term_ids phải là mảng tối đa 50 phần tử', origin);
+  }
+  const termIds = body.term_ids.map(value => typeof value === 'string' ? value.trim() : '');
+  if (termIds.some(id => !id) || new Set(termIds).size !== termIds.length) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'term_ids phải là các id không rỗng và không trùng nhau', origin);
+  }
+  try {
+    const row = await env.DB.prepare('SELECT id FROM lexicals WHERE id = ?').bind(lexicalId).first<{ id: string }>();
+    if (!row) return errorResponse(404, 'NOT_FOUND', 'Lexical không tồn tại', origin);
+    if (termIds.length > 0) {
+      const placeholders = termIds.map(() => '?').join(', ');
+      const rows = await env.DB.prepare(`
+        SELECT term.id, term.taxonomy_id, taxonomy.selection_mode
+        FROM taxonomy_terms term
+        JOIN taxonomies taxonomy ON taxonomy.id = term.taxonomy_id
+        WHERE term.id IN (${placeholders})
+      `).bind(...termIds).all<{ id: string; taxonomy_id: string; selection_mode: 'single' | 'multiple' }>();
+      if (rows.results.length !== termIds.length) {
+        const found = new Set(rows.results.map(row => row.id));
+        return errorResponse(404, 'NOT_FOUND', { term_ids: termIds.filter(id => !found.has(id)) }, origin);
+      }
+      const singleTaxonomies = new Set<string>();
+      for (const r of rows.results) {
+        if (r.selection_mode === 'single' && singleTaxonomies.has(r.taxonomy_id)) {
+          return errorResponse(409, 'CONFLICT', `Taxonomy ${r.taxonomy_id} chỉ cho phép chọn một term`, origin);
+        }
+        if (r.selection_mode === 'single') singleTaxonomies.add(r.taxonomy_id);
+      }
+    }
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM lexical_terms WHERE lexical_id = ?').bind(lexicalId),
+      ...termIds.map(termId => env.DB.prepare('INSERT INTO lexical_terms (lexical_id, term_id) VALUES (?, ?)').bind(lexicalId, termId)),
+    ]);
+    return successResponse(200, 'UPDATED', await getLexicalTerms(env, lexicalId), origin);
+  } catch (error) {
+    if (isConstraint(error)) return errorResponse(409, 'CONFLICT', error instanceof Error ? error.message : undefined, origin);
+    return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
+  }
+}
+
+export const handleReplaceTextTerms = handleReplaceSentenceTerms;

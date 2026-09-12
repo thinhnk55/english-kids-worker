@@ -28,27 +28,29 @@ export async function handleBatchDeleteTexts(request: Request, env: Env, origin:
   const body = await readBody(request, origin);
   if (isResponse(body)) return body;
 
-  if (!Array.isArray(body.text_ids) || body.text_ids.length === 0 || body.text_ids.length > 200) {
-    return errorResponse(400, 'VALIDATION_ERROR', 'text_ids phải là mảng chứa từ 1 đến 200 id', origin);
-  }
+  const sentenceIds = Array.isArray(body.text_ids)
+    ? body.text_ids.map(id => typeof id === 'string' ? id.trim() : '').filter(Boolean)
+    : Array.isArray(body.ids)
+    ? body.ids.map(id => typeof id === 'string' ? id.trim() : '').filter(Boolean)
+    : [];
 
-  const textIds = body.text_ids.map(id => typeof id === 'string' ? id.trim() : '').filter(Boolean);
-  if (textIds.length === 0) {
-    return errorResponse(400, 'VALIDATION_ERROR', 'text_ids chứa các id không hợp lệ', origin);
+  if (sentenceIds.length === 0 || sentenceIds.length > 200) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'text_ids/ids phải là mảng chứa từ 1 đến 200 id', origin);
   }
 
   try {
     const statements: D1PreparedStatement[] = [];
-    for (const chunk of chunks(textIds, 50)) {
+    for (const chunk of chunks(sentenceIds, 50)) {
       const placeholders = chunk.map(() => '?').join(', ');
-      statements.push(env.DB.prepare(`DELETE FROM texts WHERE id IN (${placeholders})`).bind(...chunk));
+      statements.push(env.DB.prepare(`DELETE FROM sentences WHERE id IN (${placeholders})`).bind(...chunk));
     }
 
     await env.DB.batch(statements);
 
     return successResponse(200, 'DELETED', {
-      deleted_count: textIds.length,
-      text_ids: textIds,
+      deleted_count: sentenceIds.length,
+      text_ids: sentenceIds,
+      ids: sentenceIds,
     }, origin);
   } catch (error) {
     return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
@@ -59,20 +61,20 @@ export async function handleBatchAssignTerms(request: Request, env: Env, origin:
   const body = await readBody(request, origin);
   if (isResponse(body)) return body;
 
-  if (!Array.isArray(body.text_ids) || body.text_ids.length === 0 || body.text_ids.length > 200) {
-    return errorResponse(400, 'VALIDATION_ERROR', 'text_ids phải là mảng chứa từ 1 đến 200 id', origin);
+  const rawIds = Array.isArray(body.text_ids) ? body.text_ids : Array.isArray(body.ids) ? body.ids : [];
+  if (rawIds.length === 0 || rawIds.length > 200) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'text_ids/ids phải là mảng chứa từ 1 đến 200 id', origin);
   }
 
   if (!Array.isArray(body.term_ids)) {
     return errorResponse(400, 'VALIDATION_ERROR', 'term_ids phải là mảng các term_id', origin);
   }
 
-  const textIds = Array.from(new Set(body.text_ids.map(id => typeof id === 'string' ? id.trim() : '').filter(Boolean)));
+  const sentenceIds = Array.from(new Set(rawIds.map(id => typeof id === 'string' ? id.trim() : '').filter(Boolean)));
   const termIds = Array.from(new Set(body.term_ids.map(id => typeof id === 'string' ? id.trim() : '').filter(Boolean)));
   const mode = body.mode === 'replace' ? 'replace' : 'add';
 
   try {
-    // Validate terms exist
     if (termIds.length > 0) {
       const termPlaceholders = termIds.map(() => '?').join(', ');
       const existingTerms = await env.DB.prepare(`SELECT id FROM taxonomy_terms WHERE id IN (${termPlaceholders})`).bind(...termIds).all<{ id: string }>();
@@ -84,12 +86,12 @@ export async function handleBatchAssignTerms(request: Request, env: Env, origin:
 
     const statements: D1PreparedStatement[] = [];
 
-    for (const textId of textIds) {
+    for (const sentenceId of sentenceIds) {
       if (mode === 'replace') {
-        statements.push(env.DB.prepare('DELETE FROM text_terms WHERE text_id = ?').bind(textId));
+        statements.push(env.DB.prepare('DELETE FROM sentence_terms WHERE sentence_id = ?').bind(sentenceId));
       }
       for (const termId of termIds) {
-        statements.push(env.DB.prepare('INSERT OR IGNORE INTO text_terms (text_id, term_id) VALUES (?, ?)').bind(textId, termId));
+        statements.push(env.DB.prepare('INSERT OR IGNORE INTO sentence_terms (sentence_id, term_id) VALUES (?, ?)').bind(sentenceId, termId));
       }
     }
 
@@ -98,7 +100,7 @@ export async function handleBatchAssignTerms(request: Request, env: Env, origin:
     }
 
     return successResponse(200, 'UPDATED', {
-      processed_text_ids: textIds,
+      processed_text_ids: sentenceIds,
       term_ids: termIds,
       mode,
     }, origin);

@@ -26,19 +26,12 @@ export interface ImportLexicalMapping {
   display_order?: number;
 }
 
-export interface ImportTermRef {
-  term_id?: string;
-  taxonomy_code?: string;
-  code?: string;
-}
-
 export interface ImportTextItem {
   id: string;
   text: string;
   phonemes: string | null;
   tokens: string[];
   translations: Record<string, string>;
-  terms: ImportTermRef[];
   audios: ImportMediaAudio[];
   images: ImportMedia[];
   videos: ImportMedia[];
@@ -69,12 +62,6 @@ function parseTranslations(value: unknown): Record<string, string> {
     if (typeof v === 'string') res[k] = v.trim();
   }
   return res;
-}
-
-function chunks<T>(items: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size));
-  return result;
 }
 
 export function parseImportPayload(raw: unknown, origin: string): BatchImportPayload | Response {
@@ -110,21 +97,6 @@ export function parseImportPayload(raw: unknown, origin: string): BatchImportPay
     }
 
     const translations = parseTranslations(itemObj.translations);
-
-    // Terms
-    const terms: ImportTermRef[] = [];
-    if (Array.isArray(itemObj.terms)) {
-      for (const t of itemObj.terms) {
-        const tObj = objectValue(t);
-        if (tObj) {
-          terms.push({
-            term_id: cleanText(tObj.term_id) ?? undefined,
-            taxonomy_code: cleanText(tObj.taxonomy_code) ?? undefined,
-            code: cleanText(tObj.code) ?? undefined,
-          });
-        }
-      }
-    }
 
     // Media
     const mediaObj = objectValue(itemObj.media) ?? itemObj;
@@ -183,7 +155,6 @@ export function parseImportPayload(raw: unknown, origin: string): BatchImportPay
       phonemes,
       tokens,
       translations,
-      terms,
       audios,
       images,
       videos,
@@ -192,24 +163,6 @@ export function parseImportPayload(raw: unknown, origin: string): BatchImportPay
   }
 
   return { items, strategy };
-}
-
-export async function resolveTermCodesMap(env: Env, items: ImportTextItem[]): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  const refs = items.flatMap(item => item.terms.filter(ref => ref.taxonomy_code && ref.code));
-  for (const refChunk of chunks(refs, 40)) {
-    if (refChunk.length === 0) continue;
-    const clauses = refChunk.map(() => '(taxonomy.code = ? AND term.code = ?)').join(' OR ');
-    const params = refChunk.flatMap(ref => [ref.taxonomy_code!, ref.code!]);
-    const rows = await env.DB.prepare(`
-      SELECT term.id, taxonomy.code AS taxonomy_code, term.code
-      FROM taxonomy_terms term
-      JOIN taxonomies taxonomy ON taxonomy.id = term.taxonomy_id
-      WHERE ${clauses}
-    `).bind(...params).all<{ id: string; taxonomy_code: string; code: string }>();
-    for (const row of rows.results) map.set(`${row.taxonomy_code}::${row.code}`, row.id);
-  }
-  return map;
 }
 
 export async function handlePreviewBatchImport(request: Request, env: Env, origin: string): Promise<Response> {
@@ -229,33 +182,21 @@ export async function handlePreviewBatchImport(request: Request, env: Env, origi
   if (isResponse(parsed)) return parsed;
 
   try {
-    const termCodeMap = await resolveTermCodesMap(env, parsed.items);
     const errors: string[] = [];
     const warnings: string[] = [];
 
     const itemIds = parsed.items.map(item => item.id);
     if (new Set(itemIds).size !== itemIds.length) {
-      errors.push('Dữ liệu chứa các text id bị lặp lại trong cùng payload');
+      errors.push('Dữ liệu chứa các sentence id bị lặp lại trong cùng payload');
     }
 
-    // Check existing texts in DB
     const placeholders = itemIds.map(() => '?').join(', ');
-    const existingRows = await env.DB.prepare(`SELECT id FROM texts WHERE id IN (${placeholders})`).bind(...itemIds).all<{ id: string }>();
+    const existingRows = await env.DB.prepare(`SELECT id FROM sentences WHERE id IN (${placeholders})`).bind(...itemIds).all<{ id: string }>();
     const existingSet = new Set(existingRows.results.map(r => r.id));
 
     if (parsed.strategy === 'create') {
       for (const id of itemIds) {
-        if (existingSet.has(id)) errors.push(`Text ID ${id} đã tồn tại trong hệ thống (dùng strategy upsert nếu muốn ghi đè)`);
-      }
-    }
-
-    // Validate terms existence
-    for (const item of parsed.items) {
-      for (const ref of item.terms) {
-        const resolvedId = ref.term_id ?? (ref.taxonomy_code && ref.code ? termCodeMap.get(`${ref.taxonomy_code}::${ref.code}`) : null);
-        if (!resolvedId) {
-          errors.push(`Term '${ref.term_id ?? `${ref.taxonomy_code}::${ref.code}`}' trong text '${item.text.slice(0, 30)}' không tồn tại`);
-        }
+        if (existingSet.has(id)) errors.push(`Sentence ID ${id} đã tồn tại trong hệ thống (dùng strategy upsert nếu muốn ghi đè)`);
       }
     }
 
@@ -295,15 +236,14 @@ export async function handleCommitBatchImport(request: Request, env: Env, origin
   if (isResponse(parsed)) return parsed;
 
   try {
-    const termCodeMap = await resolveTermCodesMap(env, parsed.items);
     const statements: D1PreparedStatement[] = [];
 
     for (const item of parsed.items) {
-      // 1. Text statement
+      // 1. Sentence statement
       const textSql = parsed.strategy === 'upsert'
-        ? `INSERT INTO texts (id, text, phonemes, tokens, translations) VALUES (?, ?, ?, ?, ?)
+        ? `INSERT INTO sentences (id, text, phonemes, tokens, translations) VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET text = excluded.text, phonemes = excluded.phonemes, tokens = excluded.tokens, translations = excluded.translations`
-        : `INSERT INTO texts (id, text, phonemes, tokens, translations) VALUES (?, ?, ?, ?, ?)`;
+        : `INSERT INTO sentences (id, text, phonemes, tokens, translations) VALUES (?, ?, ?, ?, ?)`;
 
       statements.push(env.DB.prepare(textSql).bind(
         item.id,
@@ -313,49 +253,38 @@ export async function handleCommitBatchImport(request: Request, env: Env, origin
         JSON.stringify(item.translations),
       ));
 
-      // 2. Terms statement
-      if (item.terms.length > 0) {
-        statements.push(env.DB.prepare('DELETE FROM text_terms WHERE text_id = ?').bind(item.id));
-        for (const ref of item.terms) {
-          const termId = ref.term_id ?? (ref.taxonomy_code && ref.code ? termCodeMap.get(`${ref.taxonomy_code}::${ref.code}`) : null);
-          if (termId) {
-            statements.push(env.DB.prepare('INSERT OR IGNORE INTO text_terms (text_id, term_id) VALUES (?, ?)').bind(item.id, termId));
-          }
-        }
-      }
-
-      // 3. Media statements
+      // 2. Media statements
       if (item.audios.length > 0) {
-        statements.push(env.DB.prepare('DELETE FROM text_audio WHERE texts_id = ?').bind(item.id));
+        statements.push(env.DB.prepare('DELETE FROM sentence_audio WHERE sentence_id = ?').bind(item.id));
         for (const audio of item.audios) {
-          statements.push(env.DB.prepare('INSERT INTO text_audio (id, texts_id, voice, url) VALUES (?, ?, ?, ?)').bind(audio.id ?? generateUUIDv7(), item.id, audio.voice, audio.url));
+          statements.push(env.DB.prepare('INSERT INTO sentence_audio (id, sentence_id, voice, url) VALUES (?, ?, ?, ?)').bind(audio.id ?? generateUUIDv7(), item.id, audio.voice, audio.url));
         }
       }
 
       if (item.images.length > 0) {
-        statements.push(env.DB.prepare('DELETE FROM text_image WHERE texts_id = ?').bind(item.id));
+        statements.push(env.DB.prepare('DELETE FROM sentence_image WHERE sentence_id = ?').bind(item.id));
         for (const img of item.images) {
-          statements.push(env.DB.prepare('INSERT INTO text_image (id, texts_id, url) VALUES (?, ?, ?)').bind(img.id ?? generateUUIDv7(), item.id, img.url));
+          statements.push(env.DB.prepare('INSERT INTO sentence_image (id, sentence_id, url) VALUES (?, ?, ?)').bind(img.id ?? generateUUIDv7(), item.id, img.url));
         }
       }
 
       if (item.videos.length > 0) {
-        statements.push(env.DB.prepare('DELETE FROM text_video WHERE texts_id = ?').bind(item.id));
+        statements.push(env.DB.prepare('DELETE FROM sentence_video WHERE sentence_id = ?').bind(item.id));
         for (const vid of item.videos) {
-          statements.push(env.DB.prepare('INSERT INTO text_video (id, texts_id, url) VALUES (?, ?, ?)').bind(vid.id ?? generateUUIDv7(), item.id, vid.url));
+          statements.push(env.DB.prepare('INSERT INTO sentence_video (id, sentence_id, url) VALUES (?, ?, ?)').bind(vid.id ?? generateUUIDv7(), item.id, vid.url));
         }
       }
 
-      // 4. Mappings
+      // 3. Mappings
       if (item.lexicals.length > 0) {
-        statements.push(env.DB.prepare('DELETE FROM sentence_lexical WHERE sentence_id = ?').bind(item.id));
+        statements.push(env.DB.prepare('DELETE FROM sentence_lexicals WHERE sentence_id = ?').bind(item.id));
         for (const lex of item.lexicals) {
           if (lex.lexical_id) {
             statements.push(env.DB.prepare(`
-              INSERT INTO sentence_lexical (id, sentence_id, lexical_id, token_indexes, display_order)
+              INSERT INTO sentence_lexicals (id, sentence_id, lexical_id, position, token_indexes)
               VALUES (?, ?, ?, ?, ?)
-              ON CONFLICT(sentence_id, lexical_id, token_indexes) DO UPDATE SET display_order = excluded.display_order
-            `).bind(lex.mapping_id ?? generateUUIDv7(), item.id, lex.lexical_id, JSON.stringify(lex.token_indexes), lex.display_order ?? 0));
+              ON CONFLICT(sentence_id, lexical_id, token_indexes) DO UPDATE SET position = excluded.position
+            `).bind(lex.mapping_id ?? generateUUIDv7(), item.id, lex.lexical_id, lex.display_order ?? 0, JSON.stringify(lex.token_indexes)));
           }
         }
       }

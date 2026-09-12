@@ -1,6 +1,7 @@
 import { errorResponse, successResponse } from '../../utils/response.ts';
 import { generateUUIDv7 } from '../../utils/uuid.ts';
-import { getTextById, readBody } from './handlers.ts';
+import { getSentenceById, readBody } from '../sentences/handlers.ts';
+import { getLexicalById } from '../lexicals/handlers.ts';
 
 export async function handleUploadR2Asset(request: Request, env: Env, origin: string): Promise<Response> {
   const url = new URL(request.url);
@@ -95,9 +96,10 @@ export async function handleServeR2Asset(request: Request, env: Env, key: string
   return new Response(object.body, { status, headers });
 }
 
-export async function handleAddTextAudio(request: Request, env: Env, origin: string, textId: string): Promise<Response> {
-  const existing = await getTextById(env, textId);
-  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Text không tồn tại', origin);
+// --- Sentence Media Handlers ---
+export async function handleAddSentenceAudio(request: Request, env: Env, origin: string, sentenceId: string): Promise<Response> {
+  const existing = await getSentenceById(env, sentenceId);
+  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Sentence không tồn tại', origin);
 
   const body = await readBody(request, origin);
   if (body instanceof Response) return body;
@@ -110,27 +112,27 @@ export async function handleAddTextAudio(request: Request, env: Env, origin: str
   const id = generateUUIDv7();
   try {
     await env.DB.prepare(`
-      INSERT INTO text_audio (id, texts_id, voice, url)
+      INSERT INTO sentence_audio (id, sentence_id, voice, url)
       VALUES (?, ?, ?, ?)
-    `).bind(id, textId, voice, url).run();
+    `).bind(id, sentenceId, voice, url).run();
 
-    return successResponse(201, 'CREATED', { id, texts_id: textId, voice, url }, origin);
+    return successResponse(201, 'CREATED', { id, sentence_id: sentenceId, voice, url }, origin);
   } catch (error) {
     return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
   }
 }
 
-export async function handleDeleteTextAudio(env: Env, origin: string, textId: string, audioId: string): Promise<Response> {
+export async function handleDeleteSentenceAudio(env: Env, origin: string, sentenceId: string, audioId: string): Promise<Response> {
   try {
     const audio = await env.DB.prepare(`
-      SELECT url FROM text_audio WHERE id = ? AND texts_id = ?
-    `).bind(audioId, textId).first<{ url: string }>();
+      SELECT url FROM sentence_audio WHERE id = ? AND sentence_id = ?
+    `).bind(audioId, sentenceId).first<{ url: string }>();
 
     if (!audio) return errorResponse(404, 'NOT_FOUND', 'Audio không tồn tại', origin);
 
     await env.DB.prepare(`
-      DELETE FROM text_audio WHERE id = ? AND texts_id = ?
-    `).bind(audioId, textId).run();
+      DELETE FROM sentence_audio WHERE id = ? AND sentence_id = ?
+    `).bind(audioId, sentenceId).run();
 
     if (audio.url && audio.url.includes('english-kids-bucket.hocnhe.com')) {
       const key = audio.url.replace(/^https?:\/\/[^/]+\//u, '');
@@ -143,9 +145,9 @@ export async function handleDeleteTextAudio(env: Env, origin: string, textId: st
   }
 }
 
-export async function handleAddTextImage(request: Request, env: Env, origin: string, textId: string): Promise<Response> {
-  const existing = await getTextById(env, textId);
-  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Text không tồn tại', origin);
+export async function handleAddSentenceImage(request: Request, env: Env, origin: string, sentenceId: string): Promise<Response> {
+  const existing = await getSentenceById(env, sentenceId);
+  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Sentence không tồn tại', origin);
 
   const body = await readBody(request, origin);
   if (body instanceof Response) return body;
@@ -156,27 +158,27 @@ export async function handleAddTextImage(request: Request, env: Env, origin: str
   const id = generateUUIDv7();
   try {
     await env.DB.prepare(`
-      INSERT INTO text_image (id, texts_id, url)
+      INSERT INTO sentence_image (id, sentence_id, url)
       VALUES (?, ?, ?)
-    `).bind(id, textId, url).run();
+    `).bind(id, sentenceId, url).run();
 
-    return successResponse(201, 'CREATED', { id, texts_id: textId, url }, origin);
+    return successResponse(201, 'CREATED', { id, sentence_id: sentenceId, url }, origin);
   } catch (error) {
     return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
   }
 }
 
-export async function handleDeleteTextImage(env: Env, origin: string, textId: string, imageId: string): Promise<Response> {
+export async function handleDeleteSentenceImage(env: Env, origin: string, sentenceId: string, imageId: string): Promise<Response> {
   try {
     const img = await env.DB.prepare(`
-      SELECT url FROM text_image WHERE id = ? AND texts_id = ?
-    `).bind(imageId, textId).first<{ url: string }>();
+      SELECT url FROM sentence_image WHERE id = ? AND sentence_id = ?
+    `).bind(imageId, sentenceId).first<{ url: string }>();
 
     if (!img) return errorResponse(404, 'NOT_FOUND', 'Image không tồn tại', origin);
 
     await env.DB.prepare(`
-      DELETE FROM text_image WHERE id = ? AND texts_id = ?
-    `).bind(imageId, textId).run();
+      DELETE FROM sentence_image WHERE id = ? AND sentence_id = ?
+    `).bind(imageId, sentenceId).run();
 
     if (img.url && img.url.includes('english-kids-bucket.hocnhe.com')) {
       const key = img.url.replace(/^https?:\/\/[^/]+\//u, '');
@@ -189,9 +191,9 @@ export async function handleDeleteTextImage(env: Env, origin: string, textId: st
   }
 }
 
-export async function handleAddTextVideo(request: Request, env: Env, origin: string, textId: string): Promise<Response> {
-  const existing = await getTextById(env, textId);
-  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Text không tồn tại', origin);
+export async function handleAddSentenceVideo(request: Request, env: Env, origin: string, sentenceId: string): Promise<Response> {
+  const existing = await getSentenceById(env, sentenceId);
+  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Sentence không tồn tại', origin);
 
   const body = await readBody(request, origin);
   if (body instanceof Response) return body;
@@ -202,21 +204,21 @@ export async function handleAddTextVideo(request: Request, env: Env, origin: str
   const id = generateUUIDv7();
   try {
     await env.DB.prepare(`
-      INSERT INTO text_video (id, texts_id, url)
+      INSERT INTO sentence_video (id, sentence_id, url)
       VALUES (?, ?, ?)
-    `).bind(id, textId, url).run();
+    `).bind(id, sentenceId, url).run();
 
-    return successResponse(201, 'CREATED', { id, texts_id: textId, url }, origin);
+    return successResponse(201, 'CREATED', { id, sentence_id: sentenceId, url }, origin);
   } catch (error) {
     return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
   }
 }
 
-export async function handleDeleteTextVideo(env: Env, origin: string, textId: string, videoId: string): Promise<Response> {
+export async function handleDeleteSentenceVideo(env: Env, origin: string, sentenceId: string, videoId: string): Promise<Response> {
   try {
     const res = await env.DB.prepare(`
-      DELETE FROM text_video WHERE id = ? AND texts_id = ?
-    `).bind(videoId, textId).run();
+      DELETE FROM sentence_video WHERE id = ? AND sentence_id = ?
+    `).bind(videoId, sentenceId).run();
 
     if (res.meta.changes === 0) return errorResponse(404, 'NOT_FOUND', 'Video không tồn tại', origin);
     return successResponse(200, 'DELETED', { deleted: true }, origin);
@@ -225,43 +227,141 @@ export async function handleDeleteTextVideo(env: Env, origin: string, textId: st
   }
 }
 
-export async function handleUpdateTextLexicals(request: Request, env: Env, origin: string, textId: string): Promise<Response> {
-  const existing = await getTextById(env, textId);
-  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Text không tồn tại', origin);
+// --- Lexical Media Handlers ---
+export async function handleAddLexicalAudio(request: Request, env: Env, origin: string, lexicalId: string): Promise<Response> {
+  const existing = await getLexicalById(env, lexicalId);
+  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Lexical không tồn tại', origin);
 
   const body = await readBody(request, origin);
   if (body instanceof Response) return body;
 
-  const lexicals = Array.isArray(body.lexicals) ? body.lexicals : [];
+  const voice = typeof body.voice === 'string' ? body.voice.trim() : 'default';
+  const url = typeof body.url === 'string' ? body.url.trim() : '';
 
+  if (!url) return errorResponse(400, 'VALIDATION_ERROR', 'url không được để trống', origin);
+
+  const id = generateUUIDv7();
   try {
-    const statements: D1PreparedStatement[] = [
-      env.DB.prepare('DELETE FROM sentence_lexical WHERE sentence_id = ?').bind(textId),
-    ];
+    await env.DB.prepare(`
+      INSERT INTO lexical_audio (id, lexical_id, voice, url)
+      VALUES (?, ?, ?, ?)
+    `).bind(id, lexicalId, voice, url).run();
 
-    for (const item of lexicals) {
-      if (typeof item === 'object' && item !== null) {
-        const lexicalId = typeof item.lexical_id === 'string' ? item.lexical_id.trim() : '';
-        const tokenIndexes = Array.isArray(item.token_indexes)
-          ? item.token_indexes.map(Number).filter((n: number) => Number.isInteger(n) && n >= 0)
-          : [];
-        const displayOrder = Number.isInteger(item.display_order) ? Number(item.display_order) : 0;
-
-        if (lexicalId && tokenIndexes.length > 0) {
-          const mappingId = generateUUIDv7();
-          statements.push(
-            env.DB.prepare(`
-              INSERT INTO sentence_lexical (id, sentence_id, lexical_id, token_indexes, display_order)
-              VALUES (?, ?, ?, ?, ?)
-            `).bind(mappingId, textId, lexicalId, JSON.stringify(tokenIndexes), displayOrder)
-          );
-        }
-      }
-    }
-
-    await env.DB.batch(statements);
-    return successResponse(200, 'UPDATED', { updated: true }, origin);
+    return successResponse(201, 'CREATED', { id, lexical_id: lexicalId, voice, url }, origin);
   } catch (error) {
     return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
   }
 }
+
+export async function handleDeleteLexicalAudio(env: Env, origin: string, lexicalId: string, audioId: string): Promise<Response> {
+  try {
+    const audio = await env.DB.prepare(`
+      SELECT url FROM lexical_audio WHERE id = ? AND lexical_id = ?
+    `).bind(audioId, lexicalId).first<{ url: string }>();
+
+    if (!audio) return errorResponse(404, 'NOT_FOUND', 'Audio không tồn tại', origin);
+
+    await env.DB.prepare(`
+      DELETE FROM lexical_audio WHERE id = ? AND lexical_id = ?
+    `).bind(audioId, lexicalId).run();
+
+    if (audio.url && audio.url.includes('english-kids-bucket.hocnhe.com')) {
+      const key = audio.url.replace(/^https?:\/\/[^/]+\//u, '');
+      await env.ASSETS.delete(key).catch(console.error);
+    }
+
+    return successResponse(200, 'DELETED', { deleted: true }, origin);
+  } catch (error) {
+    return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
+  }
+}
+
+export async function handleAddLexicalImage(request: Request, env: Env, origin: string, lexicalId: string): Promise<Response> {
+  const existing = await getLexicalById(env, lexicalId);
+  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Lexical không tồn tại', origin);
+
+  const body = await readBody(request, origin);
+  if (body instanceof Response) return body;
+
+  const url = typeof body.url === 'string' ? body.url.trim() : '';
+  if (!url) return errorResponse(400, 'VALIDATION_ERROR', 'url không được để trống', origin);
+
+  const id = generateUUIDv7();
+  try {
+    await env.DB.prepare(`
+      INSERT INTO lexical_image (id, lexical_id, url)
+      VALUES (?, ?, ?)
+    `).bind(id, lexicalId, url).run();
+
+    return successResponse(201, 'CREATED', { id, lexical_id: lexicalId, url }, origin);
+  } catch (error) {
+    return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
+  }
+}
+
+export async function handleDeleteLexicalImage(env: Env, origin: string, lexicalId: string, imageId: string): Promise<Response> {
+  try {
+    const img = await env.DB.prepare(`
+      SELECT url FROM lexical_image WHERE id = ? AND lexical_id = ?
+    `).bind(imageId, lexicalId).first<{ url: string }>();
+
+    if (!img) return errorResponse(404, 'NOT_FOUND', 'Image không tồn tại', origin);
+
+    await env.DB.prepare(`
+      DELETE FROM lexical_image WHERE id = ? AND lexical_id = ?
+    `).bind(imageId, lexicalId).run();
+
+    if (img.url && img.url.includes('english-kids-bucket.hocnhe.com')) {
+      const key = img.url.replace(/^https?:\/\/[^/]+\//u, '');
+      await env.ASSETS.delete(key).catch(console.error);
+    }
+
+    return successResponse(200, 'DELETED', { deleted: true }, origin);
+  } catch (error) {
+    return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
+  }
+}
+
+export async function handleAddLexicalVideo(request: Request, env: Env, origin: string, lexicalId: string): Promise<Response> {
+  const existing = await getLexicalById(env, lexicalId);
+  if (!existing) return errorResponse(404, 'NOT_FOUND', 'Lexical không tồn tại', origin);
+
+  const body = await readBody(request, origin);
+  if (body instanceof Response) return body;
+
+  const url = typeof body.url === 'string' ? body.url.trim() : '';
+  if (!url) return errorResponse(400, 'VALIDATION_ERROR', 'url không được để trống', origin);
+
+  const id = generateUUIDv7();
+  try {
+    await env.DB.prepare(`
+      INSERT INTO lexical_video (id, lexical_id, url)
+      VALUES (?, ?, ?)
+    `).bind(id, lexicalId, url).run();
+
+    return successResponse(201, 'CREATED', { id, lexical_id: lexicalId, url }, origin);
+  } catch (error) {
+    return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
+  }
+}
+
+export async function handleDeleteLexicalVideo(env: Env, origin: string, lexicalId: string, videoId: string): Promise<Response> {
+  try {
+    const res = await env.DB.prepare(`
+      DELETE FROM lexical_video WHERE id = ? AND lexical_id = ?
+    `).bind(videoId, lexicalId).run();
+
+    if (res.meta.changes === 0) return errorResponse(404, 'NOT_FOUND', 'Video không tồn tại', origin);
+    return successResponse(200, 'DELETED', { deleted: true }, origin);
+  } catch (error) {
+    return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
+  }
+}
+
+// Backward-compatible aliases for legacy /texts endpoints
+export const handleAddTextAudio = handleAddSentenceAudio;
+export const handleDeleteTextAudio = handleDeleteSentenceAudio;
+export const handleAddTextImage = handleAddSentenceImage;
+export const handleDeleteTextImage = handleDeleteSentenceImage;
+export const handleAddTextVideo = handleAddSentenceVideo;
+export const handleDeleteTextVideo = handleDeleteSentenceVideo;

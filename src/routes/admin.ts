@@ -3,15 +3,36 @@ import {
   handleCreateTaxonomyTerm,
   handleDeleteTaxonomy,
   handleDeleteTaxonomyTerm,
+  handleGetLexicalTerms,
+  handleGetSentenceTerms,
   handleGetTaxonomy,
   handleGetTaxonomyTerms,
   handleGetTerm,
   handleGetTextTerms,
   handleListTaxonomies,
+  handleReplaceLexicalTerms,
+  handleReplaceSentenceTerms,
   handleReplaceTextTerms,
   handleUpdateTaxonomy,
   handleUpdateTaxonomyTerm,
 } from '../features/classification/handlers.ts';
+import {
+  handleBatchDeleteLexicals,
+  handleCreateLexical,
+  handleDeleteLexical,
+  handleGetLexical,
+  handleListLexicals,
+  handleUpdateLexical,
+} from '../features/lexicals/handlers.ts';
+import {
+  handleBatchDeleteSentences,
+  handleCreateSentence,
+  handleDeleteSentence,
+  handleGetSentence,
+  handleListSentences,
+  handleUpdateSentence,
+  handleUpdateSentenceLexicals,
+} from '../features/sentences/handlers.ts';
 import {
   handleBatchAssignTerms,
   handleBatchDeleteTexts,
@@ -22,20 +43,32 @@ import {
   handleGetText,
   handleListTexts,
   handleUpdateText,
+  handleUpdateTextLexicals,
 } from '../features/texts/handlers.ts';
 import {
   handleCommitBatchImport,
   handlePreviewBatchImport,
 } from '../features/texts/import.ts';
 import {
+  handleAddLexicalAudio,
+  handleAddLexicalImage,
+  handleAddLexicalVideo,
+  handleAddSentenceAudio,
+  handleAddSentenceImage,
+  handleAddSentenceVideo,
   handleAddTextAudio,
   handleAddTextImage,
   handleAddTextVideo,
+  handleDeleteLexicalAudio,
+  handleDeleteLexicalImage,
+  handleDeleteLexicalVideo,
   handleDeleteR2Asset,
+  handleDeleteSentenceAudio,
+  handleDeleteSentenceImage,
+  handleDeleteSentenceVideo,
   handleDeleteTextAudio,
   handleDeleteTextImage,
   handleDeleteTextVideo,
-  handleUpdateTextLexicals,
   handleUploadR2Asset,
 } from '../features/texts/media.ts';
 import { errorResponse } from '../utils/response.ts';
@@ -100,7 +133,158 @@ export async function routeAdminRequest(
     return methodNotAllowed(origin);
   }
 
-  // Texts Batch Routes
+  // Sentences Routes
+  if (path === '/sentences/import/preview' || path === '/sentences/batch-import/preview') {
+    return request.method === 'POST' ? handlePreviewBatchImport(request, env, origin) : methodNotAllowed(origin);
+  }
+
+  if (path === '/sentences/import' || path === '/sentences/batch-import/commit') {
+    return request.method === 'POST' ? handleCommitBatchImport(request, env, origin) : methodNotAllowed(origin);
+  }
+
+  if (path === '/sentences/batch-delete') {
+    return request.method === 'POST' ? handleBatchDeleteSentences(request, env, origin) : methodNotAllowed(origin);
+  }
+
+  const sentenceAudioItemMatch = path.match(/^\/sentences\/([^/]+)\/audios\/([^/]+)$/);
+  if (sentenceAudioItemMatch) {
+    return request.method === 'DELETE'
+      ? handleDeleteSentenceAudio(env, origin, sentenceAudioItemMatch[1], sentenceAudioItemMatch[2])
+      : methodNotAllowed(origin);
+  }
+
+  const sentenceAudiosMatch = path.match(/^\/sentences\/([^/]+)\/audios$/);
+  if (sentenceAudiosMatch) {
+    return request.method === 'POST'
+      ? handleAddSentenceAudio(request, env, origin, sentenceAudiosMatch[1])
+      : methodNotAllowed(origin);
+  }
+
+  const sentenceImageItemMatch = path.match(/^\/sentences\/([^/]+)\/images\/([^/]+)$/);
+  if (sentenceImageItemMatch) {
+    return request.method === 'DELETE'
+      ? handleDeleteSentenceImage(env, origin, sentenceImageItemMatch[1], sentenceImageItemMatch[2])
+      : methodNotAllowed(origin);
+  }
+
+  const sentenceImagesMatch = path.match(/^\/sentences\/([^/]+)\/images$/);
+  if (sentenceImagesMatch) {
+    return request.method === 'POST'
+      ? handleAddSentenceImage(request, env, origin, sentenceImagesMatch[1])
+      : methodNotAllowed(origin);
+  }
+
+  const sentenceVideoItemMatch = path.match(/^\/sentences\/([^/]+)\/videos\/([^/]+)$/);
+  if (sentenceVideoItemMatch) {
+    return request.method === 'DELETE'
+      ? handleDeleteSentenceVideo(env, origin, sentenceVideoItemMatch[1], sentenceVideoItemMatch[2])
+      : methodNotAllowed(origin);
+  }
+
+  const sentenceVideosMatch = path.match(/^\/sentences\/([^/]+)\/videos$/);
+  if (sentenceVideosMatch) {
+    return request.method === 'POST'
+      ? handleAddSentenceVideo(request, env, origin, sentenceVideosMatch[1])
+      : methodNotAllowed(origin);
+  }
+
+  const sentenceLexicalsMatch = path.match(/^\/sentences\/([^/]+)\/lexicals$/);
+  if (sentenceLexicalsMatch) {
+    return request.method === 'PUT'
+      ? handleUpdateSentenceLexicals(request, env, origin, sentenceLexicalsMatch[1])
+      : methodNotAllowed(origin);
+  }
+
+  const sentenceTermsMatch = path.match(/^\/sentences\/([^/]+)\/terms$/);
+  if (sentenceTermsMatch) {
+    if (request.method === 'GET') return handleGetSentenceTerms(env, origin, sentenceTermsMatch[1]);
+    if (request.method === 'PUT') return handleReplaceSentenceTerms(request, env, origin, sentenceTermsMatch[1]);
+    return methodNotAllowed(origin);
+  }
+
+  if (path === '/sentences') {
+    if (request.method === 'GET') return handleListSentences(request, env, origin);
+    if (request.method === 'POST') return handleCreateSentence(request, env, origin);
+    return methodNotAllowed(origin);
+  }
+
+  const sentenceMatch = path.match(/^\/sentences\/([^/]+)$/);
+  if (sentenceMatch) {
+    if (request.method === 'GET') return handleGetSentence(env, origin, sentenceMatch[1]);
+    if (request.method === 'PUT') return handleUpdateSentence(request, env, origin, sentenceMatch[1]);
+    if (request.method === 'DELETE') return handleDeleteSentence(env, origin, sentenceMatch[1]);
+    return methodNotAllowed(origin);
+  }
+
+  // Lexicals Routes
+  if (path === '/lexicals/batch-delete') {
+    return request.method === 'POST' ? handleBatchDeleteLexicals(request, env, origin) : methodNotAllowed(origin);
+  }
+
+  const lexicalAudioItemMatch = path.match(/^\/lexicals\/([^/]+)\/audios\/([^/]+)$/);
+  if (lexicalAudioItemMatch) {
+    return request.method === 'DELETE'
+      ? handleDeleteLexicalAudio(env, origin, lexicalAudioItemMatch[1], lexicalAudioItemMatch[2])
+      : methodNotAllowed(origin);
+  }
+
+  const lexicalAudiosMatch = path.match(/^\/lexicals\/([^/]+)\/audios$/);
+  if (lexicalAudiosMatch) {
+    return request.method === 'POST'
+      ? handleAddLexicalAudio(request, env, origin, lexicalAudiosMatch[1])
+      : methodNotAllowed(origin);
+  }
+
+  const lexicalImageItemMatch = path.match(/^\/lexicals\/([^/]+)\/images\/([^/]+)$/);
+  if (lexicalImageItemMatch) {
+    return request.method === 'DELETE'
+      ? handleDeleteLexicalImage(env, origin, lexicalImageItemMatch[1], lexicalImageItemMatch[2])
+      : methodNotAllowed(origin);
+  }
+
+  const lexicalImagesMatch = path.match(/^\/lexicals\/([^/]+)\/images$/);
+  if (lexicalImagesMatch) {
+    return request.method === 'POST'
+      ? handleAddLexicalImage(request, env, origin, lexicalImagesMatch[1])
+      : methodNotAllowed(origin);
+  }
+
+  const lexicalVideoItemMatch = path.match(/^\/lexicals\/([^/]+)\/videos\/([^/]+)$/);
+  if (lexicalVideoItemMatch) {
+    return request.method === 'DELETE'
+      ? handleDeleteLexicalVideo(env, origin, lexicalVideoItemMatch[1], lexicalVideoItemMatch[2])
+      : methodNotAllowed(origin);
+  }
+
+  const lexicalVideosMatch = path.match(/^\/lexicals\/([^/]+)\/videos$/);
+  if (lexicalVideosMatch) {
+    return request.method === 'POST'
+      ? handleAddLexicalVideo(request, env, origin, lexicalVideosMatch[1])
+      : methodNotAllowed(origin);
+  }
+
+  const lexicalTermsMatch = path.match(/^\/lexicals\/([^/]+)\/terms$/);
+  if (lexicalTermsMatch) {
+    if (request.method === 'GET') return handleGetLexicalTerms(env, origin, lexicalTermsMatch[1]);
+    if (request.method === 'PUT') return handleReplaceLexicalTerms(request, env, origin, lexicalTermsMatch[1]);
+    return methodNotAllowed(origin);
+  }
+
+  if (path === '/lexicals') {
+    if (request.method === 'GET') return handleListLexicals(request, env, origin);
+    if (request.method === 'POST') return handleCreateLexical(request, env, origin);
+    return methodNotAllowed(origin);
+  }
+
+  const lexicalMatch = path.match(/^\/lexicals\/([^/]+)$/);
+  if (lexicalMatch) {
+    if (request.method === 'GET') return handleGetLexical(env, origin, lexicalMatch[1]);
+    if (request.method === 'PUT') return handleUpdateLexical(request, env, origin, lexicalMatch[1]);
+    if (request.method === 'DELETE') return handleDeleteLexical(env, origin, lexicalMatch[1]);
+    return methodNotAllowed(origin);
+  }
+
+  // Texts Legacy Batch Routes
   if (path === '/texts/import/preview' || path === '/texts/batch-import/preview') {
     return request.method === 'POST' ? handlePreviewBatchImport(request, env, origin) : methodNotAllowed(origin);
   }
@@ -117,7 +301,7 @@ export async function routeAdminRequest(
     return request.method === 'PUT' || request.method === 'POST' ? handleBatchAssignTerms(request, env, origin) : methodNotAllowed(origin);
   }
 
-  // Text Media Routes
+  // Text Legacy Media Routes
   const textAudioItemMatch = path.match(/^\/texts\/([^/]+)\/audios\/([^/]+)$/);
   if (textAudioItemMatch) {
     return request.method === 'DELETE'
@@ -160,7 +344,7 @@ export async function routeAdminRequest(
       : methodNotAllowed(origin);
   }
 
-  // Text Lexicals Route
+  // Text Legacy Lexicals Route
   const textLexicalsMatch = path.match(/^\/texts\/([^/]+)\/lexicals$/);
   if (textLexicalsMatch) {
     return request.method === 'PUT'
@@ -168,7 +352,7 @@ export async function routeAdminRequest(
       : methodNotAllowed(origin);
   }
 
-  // Text Terms Route
+  // Text Legacy Terms Route
   const textTermsMatch = path.match(/^\/texts\/([^/]+)\/terms$/);
   if (textTermsMatch) {
     if (request.method === 'GET') return handleGetTextTerms(env, origin, textTermsMatch[1]);
@@ -176,7 +360,7 @@ export async function routeAdminRequest(
     return methodNotAllowed(origin);
   }
 
-  // Texts CRUD Routes
+  // Texts Legacy CRUD Routes
   if (path === '/texts') {
     if (request.method === 'GET') return handleListTexts(request, env, origin);
     if (request.method === 'POST') return handleCreateText(request, env, origin);

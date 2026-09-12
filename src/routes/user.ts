@@ -5,6 +5,14 @@ import {
   handleListTaxonomies,
 } from '../features/classification/handlers.ts';
 import {
+  handleGetLexical,
+  handleListLexicals,
+} from '../features/lexicals/handlers.ts';
+import {
+  handleGetSentence,
+  handleListSentences,
+} from '../features/sentences/handlers.ts';
+import {
   handleGetText,
   handleListTexts,
 } from '../features/texts/handlers.ts';
@@ -26,7 +34,27 @@ export async function routeUserRequest(
     });
   }
 
-  // Texts User Routes
+  // Sentences User Routes
+  if (path === '/sentences') {
+    if (request.method === 'GET') return handleListSentences(request, env, origin);
+  }
+
+  const sentenceMatch = path.match(/^\/sentences\/([^/]+)$/);
+  if (sentenceMatch) {
+    if (request.method === 'GET') return handleGetSentence(env, origin, sentenceMatch[1]);
+  }
+
+  // Lexicals User Routes
+  if (path === '/lexicals') {
+    if (request.method === 'GET') return handleListLexicals(request, env, origin);
+  }
+
+  const lexicalMatch = path.match(/^\/lexicals\/([^/]+)$/);
+  if (lexicalMatch) {
+    if (request.method === 'GET') return handleGetLexical(env, origin, lexicalMatch[1]);
+  }
+
+  // Texts Legacy User Routes
   if (path === '/texts') {
     if (request.method === 'GET') return handleListTexts(request, env, origin);
   }

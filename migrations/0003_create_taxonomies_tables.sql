@@ -25,13 +25,22 @@ CREATE TABLE IF NOT EXISTS taxonomy_terms (
   UNIQUE (id, taxonomy_id)
 );
 
-CREATE TABLE IF NOT EXISTS text_terms (
-  text_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS sentence_terms (
+  sentence_id TEXT NOT NULL,
   term_id TEXT NOT NULL,
-  PRIMARY KEY (text_id, term_id),
-  FOREIGN KEY (text_id) REFERENCES texts(id) ON DELETE CASCADE,
+  PRIMARY KEY (sentence_id, term_id),
+  FOREIGN KEY (sentence_id) REFERENCES sentences(id) ON DELETE CASCADE,
+  FOREIGN KEY (term_id) REFERENCES taxonomy_terms(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS lexical_terms (
+  lexical_id TEXT NOT NULL,
+  term_id TEXT NOT NULL,
+  PRIMARY KEY (lexical_id, term_id),
+  FOREIGN KEY (lexical_id) REFERENCES lexicals(id) ON DELETE CASCADE,
   FOREIGN KEY (term_id) REFERENCES taxonomy_terms(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_taxonomy_terms_parent ON taxonomy_terms(taxonomy_id, parent_id, position);
-CREATE INDEX IF NOT EXISTS idx_text_terms_term ON text_terms(term_id, text_id);
+CREATE INDEX IF NOT EXISTS idx_sentence_terms_term ON sentence_terms(term_id, sentence_id);
+CREATE INDEX IF NOT EXISTS idx_lexical_terms_term ON lexical_terms(term_id, lexical_id);
