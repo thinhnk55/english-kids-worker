@@ -159,20 +159,46 @@ async function readTermInput(request: Request, origin: string): Promise<TermInpu
   return { parent_id: parentId, code, name, description, translations, position: position as number };
 }
 
-export async function getTaxonomy(env: Env, id: string): Promise<TaxonomyRow | null> {
+export async function getTaxonomy(env: Env, idOrCode: string): Promise<TaxonomyRow | null> {
   return env.DB.prepare(`
     SELECT id, code, name, description, translations, selection_mode
     FROM taxonomies
-    WHERE id = ?
-  `).bind(id).first<TaxonomyRow>();
+    WHERE id = ? OR code = ?
+  `).bind(idOrCode, idOrCode).first<TaxonomyRow>();
 }
 
-export async function getTerm(env: Env, id: string): Promise<TaxonomyTermRow | null> {
+export async function getTerm(env: Env, idOrCode: string): Promise<TaxonomyTermRow | null> {
   return env.DB.prepare(`
     SELECT id, taxonomy_id, parent_id, code, name, description, translations, position
     FROM taxonomy_terms
-    WHERE id = ?
-  `).bind(id).first<TaxonomyTermRow>();
+    WHERE id = ? OR code = ?
+  `).bind(idOrCode, idOrCode).first<TaxonomyTermRow>();
+}
+
+export async function handleGetTerm(env: Env, origin: string, idOrCode: string): Promise<Response> {
+  try {
+    const term = await getTerm(env, idOrCode);
+    if (!term) return errorResponse(404, 'NOT_FOUND', 'Term không tồn tại', origin);
+    return successResponse(200, 'SUCCESS', parseTerm(term), origin);
+  } catch (error) {
+    return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
+  }
+}
+
+export async function handleGetTaxonomyTerms(env: Env, origin: string, taxonomyIdOrCode: string): Promise<Response> {
+  try {
+    const taxonomy = await getTaxonomy(env, taxonomyIdOrCode);
+    if (!taxonomy) return errorResponse(404, 'NOT_FOUND', 'Taxonomy không tồn tại', origin);
+    const terms = await env.DB.prepare(`
+      SELECT id, taxonomy_id, parent_id, code, name, description, translations, position
+      FROM taxonomy_terms
+      WHERE taxonomy_id = ?
+      ORDER BY position ASC, id ASC
+    `).bind(taxonomy.id).all<TaxonomyTermRow>();
+    return successResponse(200, 'SUCCESS', terms.results.map(parseTerm), origin);
+  } catch (error) {
+    return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
+  }
 }
 
 export async function getTextTerms(env: Env, textId: string) {
@@ -254,7 +280,7 @@ export async function handleGetTaxonomy(env: Env, origin: string, id: string): P
       FROM taxonomy_terms
       WHERE taxonomy_id = ?
       ORDER BY position ASC, id ASC
-    `).bind(id).all<TaxonomyTermRow>();
+    `).bind(taxonomy.id).all<TaxonomyTermRow>();
     return successResponse(200, 'SUCCESS', { ...parseTaxonomy(taxonomy), terms: terms.results.map(parseTerm) }, origin);
   } catch (error) {
     return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
@@ -282,7 +308,8 @@ export async function handleUpdateTaxonomy(request: Request, env: Env, origin: s
   const input = await readTaxonomyInput(request, origin);
   if (isResponse(input)) return input;
   try {
-    if (!await getTaxonomy(env, id)) return errorResponse(404, 'NOT_FOUND', undefined, origin);
+    const existing = await getTaxonomy(env, id);
+    if (!existing) return errorResponse(404, 'NOT_FOUND', undefined, origin);
     if (input.selection_mode === 'single') {
       const conflict = await env.DB.prepare(`
         SELECT assigned.text_id
@@ -292,7 +319,7 @@ export async function handleUpdateTaxonomy(request: Request, env: Env, origin: s
         GROUP BY assigned.text_id
         HAVING COUNT(*) > 1
         LIMIT 1
-      `).bind(id).first<{ text_id: string }>();
+      `).bind(existing.id).first<{ text_id: string }>();
       if (conflict) {
         return errorResponse(409, 'CONFLICT', `Text ${conflict.text_id} đang có nhiều term; chưa thể đổi taxonomy sang single`, origin);
       }
@@ -301,8 +328,8 @@ export async function handleUpdateTaxonomy(request: Request, env: Env, origin: s
       UPDATE taxonomies
       SET code = ?, name = ?, description = ?, translations = ?, selection_mode = ?
       WHERE id = ?
-    `).bind(input.code, input.name, input.description, JSON.stringify(input.translations), input.selection_mode, id).run();
-    const taxonomy = await getTaxonomy(env, id);
+    `).bind(input.code, input.name, input.description, JSON.stringify(input.translations), input.selection_mode, existing.id).run();
+    const taxonomy = await getTaxonomy(env, existing.id);
     return successResponse(200, 'UPDATED', taxonomy ? parseTaxonomy(taxonomy) : undefined, origin);
   } catch (error) {
     if (isConstraint(error)) return errorResponse(409, 'CONFLICT', error instanceof Error ? error.message : undefined, origin);
@@ -312,32 +339,56 @@ export async function handleUpdateTaxonomy(request: Request, env: Env, origin: s
 
 export async function handleDeleteTaxonomy(env: Env, origin: string, id: string): Promise<Response> {
   try {
-    if (!await getTaxonomy(env, id)) return errorResponse(404, 'NOT_FOUND', undefined, origin);
-    await env.DB.prepare('DELETE FROM taxonomies WHERE id = ?').bind(id).run();
+    const existing = await getTaxonomy(env, id);
+    if (!existing) return errorResponse(404, 'NOT_FOUND', undefined, origin);
+    await env.DB.prepare('DELETE FROM taxonomies WHERE id = ?').bind(existing.id).run();
     return successResponse(200, 'DELETED', undefined, origin);
   } catch (error) {
     return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin);
   }
 }
 
-export async function handleCreateTaxonomyTerm(request: Request, env: Env, origin: string, taxonomyId: string): Promise<Response> {
-  const input = await readTermInput(request, origin);
-  if (isResponse(input)) return input;
+export async function handleCreateTaxonomyTerm(request: Request, env: Env, origin: string, pathTaxonomyId?: string): Promise<Response> {
+  const body = await readBody(request, origin);
+  if (isResponse(body)) return body;
+
+  const taxonomyId = pathTaxonomyId || (typeof body.taxonomy_id === 'string' ? body.taxonomy_id.trim() : '');
+  if (!taxonomyId) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'taxonomy_id không được để trống', origin);
+  }
+
+  const code = readCode(body.code, origin);
+  if (isResponse(code)) return code;
+  const name = readRequiredText(body.name, 'name', origin);
+  if (isResponse(name)) return name;
+  const description = typeof body.description === 'string' ? body.description.trim() : '';
+  const parentId = body.parent_id === undefined || body.parent_id === null
+    ? null
+    : typeof body.parent_id === 'string' && body.parent_id.trim() ? body.parent_id.trim() : undefined;
+  if (parentId === undefined) return errorResponse(400, 'VALIDATION_ERROR', 'parent_id phải là chuỗi hoặc null', origin);
+  const position = body.position === undefined ? 0 : body.position;
+  if (!Number.isSafeInteger(position) || (position as number) < 0) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'position phải là số nguyên không âm', origin);
+  }
+  const translations = readTranslations(body.translations, origin);
+  if (isResponse(translations)) return translations;
+
   const id = generateUUIDv7();
   try {
-    if (!await getTaxonomy(env, taxonomyId)) return errorResponse(404, 'NOT_FOUND', 'Taxonomy không tồn tại', origin);
+    const taxonomy = await getTaxonomy(env, taxonomyId);
+    if (!taxonomy) return errorResponse(404, 'NOT_FOUND', 'Taxonomy không tồn tại', origin);
     await env.DB.prepare(`
       INSERT INTO taxonomy_terms (id, taxonomy_id, parent_id, code, name, description, translations, position)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
-      taxonomyId,
-      input.parent_id,
-      input.code,
-      input.name,
-      input.description,
-      JSON.stringify(input.translations),
-      input.position,
+      taxonomy.id,
+      parentId,
+      code,
+      name,
+      description,
+      JSON.stringify(translations),
+      position as number,
     ).run();
     const term = await getTerm(env, id);
     return successResponse(201, 'CREATED', term ? parseTerm(term) : undefined, origin);

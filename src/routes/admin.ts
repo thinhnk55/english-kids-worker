@@ -4,6 +4,8 @@ import {
   handleDeleteTaxonomy,
   handleDeleteTaxonomyTerm,
   handleGetTaxonomy,
+  handleGetTaxonomyTerms,
+  handleGetTerm,
   handleGetTextTerms,
   handleListTaxonomies,
   handleReplaceTextTerms,
@@ -72,9 +74,9 @@ export async function routeAdminRequest(
 
   const taxonomyTermsMatch = path.match(/^\/taxonomies\/([^/]+)\/terms$/);
   if (taxonomyTermsMatch) {
-    return request.method === 'POST'
-      ? handleCreateTaxonomyTerm(request, env, origin, taxonomyTermsMatch[1])
-      : methodNotAllowed(origin);
+    if (request.method === 'GET') return handleGetTaxonomyTerms(env, origin, taxonomyTermsMatch[1]);
+    if (request.method === 'POST') return handleCreateTaxonomyTerm(request, env, origin, taxonomyTermsMatch[1]);
+    return methodNotAllowed(origin);
   }
 
   const taxonomyMatch = path.match(/^\/taxonomies\/([^/]+)$/);
@@ -85,10 +87,16 @@ export async function routeAdminRequest(
     return methodNotAllowed(origin);
   }
 
-  const taxonomyTermMatch = path.match(/^\/taxonomy-terms\/([^/]+)$/);
-  if (taxonomyTermMatch) {
-    if (request.method === 'PUT') return handleUpdateTaxonomyTerm(request, env, origin, taxonomyTermMatch[1]);
-    if (request.method === 'DELETE') return handleDeleteTaxonomyTerm(env, origin, taxonomyTermMatch[1]);
+  if (path === '/terms') {
+    if (request.method === 'POST') return handleCreateTaxonomyTerm(request, env, origin);
+    return methodNotAllowed(origin);
+  }
+
+  const termMatch = path.match(/^\/(?:terms|taxonomy-terms)\/([^/]+)$/);
+  if (termMatch) {
+    if (request.method === 'GET') return handleGetTerm(env, origin, termMatch[1]);
+    if (request.method === 'PUT') return handleUpdateTaxonomyTerm(request, env, origin, termMatch[1]);
+    if (request.method === 'DELETE') return handleDeleteTaxonomyTerm(env, origin, termMatch[1]);
     return methodNotAllowed(origin);
   }
 
