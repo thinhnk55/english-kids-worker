@@ -156,7 +156,11 @@ export async function handleListLexicals(request: Request, env: Env, origin: str
 
     const countSql = `SELECT COUNT(*) AS total FROM lexicals l ${whereClause}`;
     const dataSql = `
-      SELECT l.id, l.text, l.type, l.phonemes, l.translations
+      SELECT 
+        l.id, l.text, l.type, l.phonemes, l.translations,
+        (SELECT COUNT(*) FROM lexical_audio WHERE lexical_id = l.id) AS audio_count,
+        (SELECT COUNT(*) FROM lexical_image WHERE lexical_id = l.id) AS image_count,
+        (SELECT COUNT(*) FROM lexical_video WHERE lexical_id = l.id) AS video_count
       FROM lexicals l
       ${whereClause}
       ORDER BY l.id DESC
@@ -164,9 +168,22 @@ export async function handleListLexicals(request: Request, env: Env, origin: str
     `;
 
     const countResult = await env.DB.prepare(countSql).bind(...params).first<{ total: number }>();
-    const dataResult = await env.DB.prepare(dataSql).bind(...params, size, offset).all<LexicalRow>();
+    const dataResult = await env.DB.prepare(dataSql).bind(...params, size, offset).all<
+      LexicalRow & { audio_count: number; image_count: number; video_count: number }
+    >();
 
-    const items = await Promise.all(dataResult.results.map(row => getLexicalDetails(env, row.id)));
+    const items = dataResult.results.map((row) => ({
+      id: row.id,
+      text: row.text,
+      type: row.type,
+      phonemes: row.phonemes,
+      translations: parseJsonObject(row.translations),
+      media: {
+        audios: Array(row.audio_count || 0).fill(null),
+        images: Array(row.image_count || 0).fill(null),
+        videos: Array(row.video_count || 0).fill(null),
+      },
+    }));
 
     return successResponse(200, 'SUCCESS', items, origin, {
       page,
