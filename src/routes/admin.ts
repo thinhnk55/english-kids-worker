@@ -3,16 +3,10 @@ import {
   handleCreateTaxonomyTerm,
   handleDeleteTaxonomy,
   handleDeleteTaxonomyTerm,
-  handleGetLexicalTerms,
-  handleGetSentenceTerms,
   handleGetTaxonomy,
   handleGetTaxonomyTerms,
   handleGetTerm,
-  handleGetTextTerms,
   handleListTaxonomies,
-  handleReplaceLexicalTerms,
-  handleReplaceSentenceTerms,
-  handleReplaceTextTerms,
   handleUpdateTaxonomy,
   handleUpdateTaxonomyTerm,
 } from '../features/classification/handlers.ts';
@@ -34,7 +28,6 @@ import {
   handleUpdateSentenceLexicals,
 } from '../features/sentences/handlers.ts';
 import {
-  handleBatchAssignTerms,
   handleBatchDeleteTexts,
 } from '../features/texts/batch.ts';
 import {
@@ -195,13 +188,6 @@ export async function routeAdminRequest(
       : methodNotAllowed(origin);
   }
 
-  const sentenceTermsMatch = path.match(/^\/sentences\/([^/]+)\/terms$/);
-  if (sentenceTermsMatch) {
-    if (request.method === 'GET') return handleGetSentenceTerms(env, origin, sentenceTermsMatch[1]);
-    if (request.method === 'PUT') return handleReplaceSentenceTerms(request, env, origin, sentenceTermsMatch[1]);
-    return methodNotAllowed(origin);
-  }
-
   if (path === '/sentences') {
     if (request.method === 'GET') return handleListSentences(request, env, origin);
     if (request.method === 'POST') return handleCreateSentence(request, env, origin);
@@ -263,13 +249,6 @@ export async function routeAdminRequest(
       : methodNotAllowed(origin);
   }
 
-  const lexicalTermsMatch = path.match(/^\/lexicals\/([^/]+)\/terms$/);
-  if (lexicalTermsMatch) {
-    if (request.method === 'GET') return handleGetLexicalTerms(env, origin, lexicalTermsMatch[1]);
-    if (request.method === 'PUT') return handleReplaceLexicalTerms(request, env, origin, lexicalTermsMatch[1]);
-    return methodNotAllowed(origin);
-  }
-
   if (path === '/lexicals') {
     if (request.method === 'GET') return handleListLexicals(request, env, origin);
     if (request.method === 'POST') return handleCreateLexical(request, env, origin);
@@ -295,10 +274,6 @@ export async function routeAdminRequest(
 
   if (path === '/texts/batch-delete') {
     return request.method === 'POST' ? handleBatchDeleteTexts(request, env, origin) : methodNotAllowed(origin);
-  }
-
-  if (path === '/texts/batch-terms') {
-    return request.method === 'PUT' || request.method === 'POST' ? handleBatchAssignTerms(request, env, origin) : methodNotAllowed(origin);
   }
 
   // Text Legacy Media Routes
@@ -350,14 +325,6 @@ export async function routeAdminRequest(
     return request.method === 'PUT'
       ? handleUpdateTextLexicals(request, env, origin, textLexicalsMatch[1])
       : methodNotAllowed(origin);
-  }
-
-  // Text Legacy Terms Route
-  const textTermsMatch = path.match(/^\/texts\/([^/]+)\/terms$/);
-  if (textTermsMatch) {
-    if (request.method === 'GET') return handleGetTextTerms(env, origin, textTermsMatch[1]);
-    if (request.method === 'PUT') return handleReplaceTextTerms(request, env, origin, textTermsMatch[1]);
-    return methodNotAllowed(origin);
   }
 
   // Texts Legacy CRUD Routes
