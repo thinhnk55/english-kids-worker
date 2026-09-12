@@ -109,8 +109,8 @@ export async function handleListLexicals(request: Request, env: Env, origin: str
     const params: (string | number)[] = [];
 
     if (query) {
-      conditions.push('l.text LIKE ?');
-      params.push(`%${query}%`);
+      conditions.push('LOWER(l.text) LIKE ?');
+      params.push(`%${query.toLowerCase()}%`);
     }
 
     if (type) {
@@ -158,7 +158,7 @@ export async function handleCreateLexical(request: Request, env: Env, origin: st
   const body = await readBody(request, origin);
   if (isResponse(body)) return body;
 
-  const textStr = typeof body.text === 'string' ? body.text.trim() : '';
+  const textStr = typeof body.text === 'string' ? body.text.trim().toLowerCase() : '';
   if (!textStr) return errorResponse(400, 'VALIDATION_ERROR', 'text không được để trống', origin);
 
   const type = typeof body.type === 'string' && body.type.trim() ? body.type.trim() : 'vocabulary';
@@ -190,7 +190,7 @@ export async function handleUpdateLexical(request: Request, env: Env, origin: st
   const body = await readBody(request, origin);
   if (isResponse(body)) return body;
 
-  const textStr = typeof body.text === 'string' ? body.text.trim() : existing.text;
+  const textStr = typeof body.text === 'string' ? body.text.trim().toLowerCase() : existing.text.toLowerCase();
   const type = typeof body.type === 'string' ? body.type.trim() : existing.type;
   const phonemes = body.phonemes === null
     ? null
