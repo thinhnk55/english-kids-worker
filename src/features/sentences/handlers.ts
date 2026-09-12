@@ -151,11 +151,7 @@ export async function handleListSentences(request: Request, env: Env, origin: st
 
     const countSql = `SELECT COUNT(*) AS total FROM sentences s ${whereClause}`;
     const dataSql = `
-      SELECT 
-        s.id, s.text, s.phonemes, s.tokens, s.translations,
-        (SELECT COUNT(*) FROM sentence_audio WHERE sentence_id = s.id) AS audio_count,
-        (SELECT COUNT(*) FROM sentence_image WHERE sentence_id = s.id) AS image_count,
-        (SELECT COUNT(*) FROM sentence_video WHERE sentence_id = s.id) AS video_count
+      SELECT s.id, s.text, s.phonemes, s.tokens, s.translations
       FROM sentences s
       ${whereClause}
       ORDER BY s.id DESC
@@ -163,22 +159,9 @@ export async function handleListSentences(request: Request, env: Env, origin: st
     `;
 
     const countResult = await env.DB.prepare(countSql).bind(...params).first<{ total: number }>();
-    const dataResult = await env.DB.prepare(dataSql).bind(...params, size, offset).all<
-      SentenceRow & { audio_count: number; image_count: number; video_count: number }
-    >();
+    const dataResult = await env.DB.prepare(dataSql).bind(...params, size, offset).all<SentenceRow>();
 
-    const items = dataResult.results.map((row) => ({
-      id: row.id,
-      text: row.text,
-      phonemes: row.phonemes,
-      tokens: parseJsonArray(row.tokens),
-      translations: parseJsonObject(row.translations),
-      media: {
-        audios: Array(row.audio_count || 0).fill(null),
-        images: Array(row.image_count || 0).fill(null),
-        videos: Array(row.video_count || 0).fill(null),
-      },
-    }));
+    const items = dataResult.results.map((row) => parseSentence(row));
 
     return successResponse(200, 'SUCCESS', items, origin, {
       page,
