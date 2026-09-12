@@ -47,8 +47,6 @@ import {
   handleAddLexicalImage,
   handleAddLexicalVideo,
   handleAddSentenceAudio,
-  handleAddSentenceImage,
-  handleAddSentenceVideo,
   handleAddTextAudio,
   handleAddTextImage,
   handleAddTextVideo,
@@ -57,8 +55,6 @@ import {
   handleDeleteLexicalVideo,
   handleDeleteR2Asset,
   handleDeleteSentenceAudio,
-  handleDeleteSentenceImage,
-  handleDeleteSentenceVideo,
   handleDeleteTextAudio,
   handleDeleteTextImage,
   handleDeleteTextVideo,
@@ -150,34 +146,6 @@ export async function routeAdminRequest(
   if (sentenceAudiosMatch) {
     return request.method === 'POST'
       ? handleAddSentenceAudio(request, env, origin, sentenceAudiosMatch[1])
-      : methodNotAllowed(origin);
-  }
-
-  const sentenceImageItemMatch = path.match(/^\/sentences\/([^/]+)\/images\/([^/]+)$/);
-  if (sentenceImageItemMatch) {
-    return request.method === 'DELETE'
-      ? handleDeleteSentenceImage(env, origin, sentenceImageItemMatch[1], sentenceImageItemMatch[2])
-      : methodNotAllowed(origin);
-  }
-
-  const sentenceImagesMatch = path.match(/^\/sentences\/([^/]+)\/images$/);
-  if (sentenceImagesMatch) {
-    return request.method === 'POST'
-      ? handleAddSentenceImage(request, env, origin, sentenceImagesMatch[1])
-      : methodNotAllowed(origin);
-  }
-
-  const sentenceVideoItemMatch = path.match(/^\/sentences\/([^/]+)\/videos\/([^/]+)$/);
-  if (sentenceVideoItemMatch) {
-    return request.method === 'DELETE'
-      ? handleDeleteSentenceVideo(env, origin, sentenceVideoItemMatch[1], sentenceVideoItemMatch[2])
-      : methodNotAllowed(origin);
-  }
-
-  const sentenceVideosMatch = path.match(/^\/sentences\/([^/]+)\/videos$/);
-  if (sentenceVideosMatch) {
-    return request.method === 'POST'
-      ? handleAddSentenceVideo(request, env, origin, sentenceVideosMatch[1])
       : methodNotAllowed(origin);
   }
 

@@ -83,10 +83,8 @@ export async function getSentenceDetails(env: Env, sentenceId: string) {
   const sentenceRow = await getSentenceById(env, sentenceId);
   if (!sentenceRow) return null;
 
-  const [audios, images, videos, mappedLexicals] = await Promise.all([
+  const [audios, mappedLexicals] = await Promise.all([
     env.DB.prepare('SELECT id, voice, url FROM sentence_audio WHERE sentence_id = ?').bind(sentenceId).all<SentenceAudioRow>(),
-    env.DB.prepare('SELECT id, url FROM sentence_image WHERE sentence_id = ?').bind(sentenceId).all<SentenceMediaRow>(),
-    env.DB.prepare('SELECT id, url FROM sentence_video WHERE sentence_id = ?').bind(sentenceId).all<SentenceMediaRow>(),
     env.DB.prepare(`
       SELECT
         sl.id AS mapping_id,
@@ -117,8 +115,8 @@ export async function getSentenceDetails(env: Env, sentenceId: string) {
     ...parseSentence(sentenceRow),
     media: {
       audios: audios.results,
-      images: images.results,
-      videos: videos.results,
+      images: [],
+      videos: [],
     },
     lexicals: mappedLexicals.results.map(row => ({
       mapping_id: row.mapping_id,

@@ -260,21 +260,6 @@ export async function handleCommitBatchImport(request: Request, env: Env, origin
           statements.push(env.DB.prepare('INSERT INTO sentence_audio (id, sentence_id, voice, url) VALUES (?, ?, ?, ?)').bind(audio.id ?? generateUUIDv7(), item.id, audio.voice, audio.url));
         }
       }
-
-      if (item.images.length > 0) {
-        statements.push(env.DB.prepare('DELETE FROM sentence_image WHERE sentence_id = ?').bind(item.id));
-        for (const img of item.images) {
-          statements.push(env.DB.prepare('INSERT INTO sentence_image (id, sentence_id, url) VALUES (?, ?, ?)').bind(img.id ?? generateUUIDv7(), item.id, img.url));
-        }
-      }
-
-      if (item.videos.length > 0) {
-        statements.push(env.DB.prepare('DELETE FROM sentence_video WHERE sentence_id = ?').bind(item.id));
-        for (const vid of item.videos) {
-          statements.push(env.DB.prepare('INSERT INTO sentence_video (id, sentence_id, url) VALUES (?, ?, ?)').bind(vid.id ?? generateUUIDv7(), item.id, vid.url));
-        }
-      }
-
       // 3. Mappings
       if (item.lexicals.length > 0) {
         statements.push(env.DB.prepare('DELETE FROM sentence_lexicals WHERE sentence_id = ?').bind(item.id));
