@@ -1,5 +1,6 @@
 import { parsePagination } from '../../utils/pagination.ts';
 import { errorResponse, successResponse } from '../../utils/response.ts';
+import { normalizeTokens, parseTokens } from '../../utils/tokens.ts';
 import { generateUUIDv7 } from '../../utils/uuid.ts';
 
 type JsonObject = Record<string, unknown>;
@@ -7,22 +8,8 @@ type JsonObject = Record<string, unknown>;
 export interface SentenceRow {
   id: string;
   text: string;
-  phonemes: string | null;
   tokens: string;
   translations: string;
-}
-
-export interface SentenceAudioRow {
-  id: string;
-  sentence_id: string;
-  voice: string;
-  url: string;
-}
-
-export interface SentenceMediaRow {
-  id: string;
-  sentence_id: string;
-  url: string;
 }
 
 function isResponse(value: unknown): value is Response {
@@ -31,15 +18,6 @@ function isResponse(value: unknown): value is Response {
 
 function isConstraint(error: unknown): boolean {
   return error instanceof Error && /constraint|unique|foreign key/i.test(error.message);
-}
-
-function parseJsonArray(value: string): unknown[] {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 function parseJsonObject(value: string): JsonObject {
@@ -51,10 +29,19 @@ function parseJsonObject(value: string): JsonObject {
   }
 }
 
+function parseTokenIndexes(value: string): number[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter(index => Number.isInteger(index) && index >= 0) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function parseSentence(row: SentenceRow) {
   return {
     ...row,
-    tokens: parseJsonArray(row.tokens),
+    tokens: parseTokens(row.tokens),
     translations: parseJsonObject(row.translations),
   };
 }
@@ -73,7 +60,7 @@ export async function readBody(request: Request, origin: string): Promise<JsonOb
 
 export async function getSentenceById(env: Env, id: string): Promise<SentenceRow | null> {
   return env.DB.prepare(`
-    SELECT id, text, phonemes, tokens, translations
+    SELECT id, text, tokens, translations
     FROM sentences
     WHERE id = ?
   `).bind(id).first<SentenceRow>();
@@ -83,49 +70,38 @@ export async function getSentenceDetails(env: Env, sentenceId: string) {
   const sentenceRow = await getSentenceById(env, sentenceId);
   if (!sentenceRow) return null;
 
-  const [audios, mappedLexicals] = await Promise.all([
-    env.DB.prepare('SELECT id, voice, url FROM sentence_audio WHERE sentence_id = ?').bind(sentenceId).all<SentenceAudioRow>(),
-    env.DB.prepare(`
-      SELECT
-        sl.id AS mapping_id,
-        sl.lexical_id,
-        sl.token_indexes,
-        sl.position AS display_order,
-        l.text,
-        l.type,
-        l.phonemes,
-        l.translations
-      FROM sentence_lexicals sl
-      JOIN lexicals l ON l.id = sl.lexical_id
-      WHERE sl.sentence_id = ?
-      ORDER BY sl.position ASC, sl.id ASC
-    `).bind(sentenceId).all<{
-      mapping_id: string;
-      lexical_id: string;
-      token_indexes: string;
-      display_order: number;
-      text: string;
-      type: string;
-      phonemes: string | null;
-      translations: string;
-    }>(),
-  ]);
+  const mappedLexicals = await env.DB.prepare(`
+    SELECT
+      sl.id AS mapping_id,
+      sl.lexical_id,
+      sl.token_indexes,
+      sl.position AS display_order,
+      l.text,
+      l.tokens,
+      l.translations
+    FROM sentence_lexicals sl
+    JOIN lexicals l ON l.id = sl.lexical_id
+    WHERE sl.sentence_id = ?
+    ORDER BY sl.position ASC, sl.id ASC
+  `).bind(sentenceId).all<{
+    mapping_id: string;
+    lexical_id: string;
+    token_indexes: string;
+    display_order: number;
+    text: string;
+    tokens: string;
+    translations: string;
+  }>();
 
   return {
     ...parseSentence(sentenceRow),
-    media: {
-      audios: audios.results,
-      images: [],
-      videos: [],
-    },
     lexicals: mappedLexicals.results.map(row => ({
       mapping_id: row.mapping_id,
       lexical_id: row.lexical_id,
       text: row.text,
-      type: row.type,
-      phonemes: row.phonemes,
+      tokens: parseTokens(row.tokens),
       translations: parseJsonObject(row.translations),
-      token_indexes: parseJsonArray(row.token_indexes),
+      token_indexes: parseTokenIndexes(row.token_indexes),
       display_order: row.display_order,
     })),
   };
@@ -149,7 +125,7 @@ export async function handleListSentences(request: Request, env: Env, origin: st
 
     const countSql = `SELECT COUNT(*) AS total FROM sentences s ${whereClause}`;
     const dataSql = `
-      SELECT s.id, s.text, s.phonemes, s.tokens, s.translations
+      SELECT s.id, s.text, s.tokens, s.translations
       FROM sentences s
       ${whereClause}
       ORDER BY s.id DESC
@@ -189,14 +165,7 @@ export async function handleCreateSentence(request: Request, env: Env, origin: s
   if (!textStr) return errorResponse(400, 'VALIDATION_ERROR', 'text không được để trống', origin);
 
   const id = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : generateUUIDv7();
-  const phonemes = typeof body.phonemes === 'string' && body.phonemes.trim() ? body.phonemes.trim() : null;
-
-  let tokens: string[];
-  if (Array.isArray(body.tokens)) {
-    tokens = body.tokens.map(t => String(t).trim()).filter(Boolean);
-  } else {
-    tokens = textStr.split(/\s+/).filter(Boolean);
-  }
+  const tokens = normalizeTokens(body.tokens, textStr);
 
   const translations = typeof body.translations === 'object' && body.translations !== null && !Array.isArray(body.translations)
     ? body.translations
@@ -204,9 +173,9 @@ export async function handleCreateSentence(request: Request, env: Env, origin: s
 
   try {
     await env.DB.prepare(`
-      INSERT INTO sentences (id, text, phonemes, tokens, translations)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(id, textStr, phonemes, JSON.stringify(tokens), JSON.stringify(translations)).run();
+      INSERT INTO sentences (id, text, tokens, translations)
+      VALUES (?, ?, ?, ?)
+    `).bind(id, textStr, JSON.stringify(tokens), JSON.stringify(translations)).run();
 
     const details = await getSentenceDetails(env, id);
     return successResponse(201, 'CREATED', details, origin);
@@ -224,16 +193,7 @@ export async function handleUpdateSentence(request: Request, env: Env, origin: s
   if (isResponse(body)) return body;
 
   const textStr = typeof body.text === 'string' ? body.text.trim() : existing.text;
-  const phonemes = body.phonemes === null
-    ? null
-    : typeof body.phonemes === 'string' ? body.phonemes.trim() || null : existing.phonemes;
-
-  let tokens: string[];
-  if (Array.isArray(body.tokens)) {
-    tokens = body.tokens.map(t => String(t).trim()).filter(Boolean);
-  } else {
-    tokens = parseJsonArray(existing.tokens) as string[];
-  }
+  const tokens = Array.isArray(body.tokens) ? normalizeTokens(body.tokens, textStr) : parseTokens(existing.tokens);
 
   const translations = typeof body.translations === 'object' && body.translations !== null && !Array.isArray(body.translations)
     ? body.translations
@@ -242,9 +202,9 @@ export async function handleUpdateSentence(request: Request, env: Env, origin: s
   try {
     await env.DB.prepare(`
       UPDATE sentences
-      SET text = ?, phonemes = ?, tokens = ?, translations = ?
+      SET text = ?, tokens = ?, translations = ?
       WHERE id = ?
-    `).bind(textStr, phonemes, JSON.stringify(tokens), JSON.stringify(translations), id).run();
+    `).bind(textStr, JSON.stringify(tokens), JSON.stringify(translations), id).run();
 
     const details = await getSentenceDetails(env, id);
     return successResponse(200, 'UPDATED', details, origin);

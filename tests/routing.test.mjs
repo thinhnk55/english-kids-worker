@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import worker from '../src/index.ts';
 
 const mockEnv = {
-  ASSET_BASE_URL: 'https://english-kids-assets.hocnhe.com',
   JWT_PUBLIC_KEY_PEM: 'MOCK_PEM',
 };
 
@@ -14,7 +13,7 @@ test('GET / or /info returns worker info', async () => {
 
   const data = await res.json();
   assert.equal(data.name, 'english-kids-worker');
-  assert.equal(data.version, '1.0.0');
+  assert.equal(data.version, '1.1.0');
 });
 
 test('OPTIONS request returns CORS headers', async () => {

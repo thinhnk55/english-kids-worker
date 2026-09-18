@@ -1,5 +1,6 @@
 import { parsePagination } from '../../utils/pagination.ts';
 import { errorResponse, successResponse } from '../../utils/response.ts';
+import { normalizeTokens, parseTokens } from '../../utils/tokens.ts';
 import { generateUUIDv7 } from '../../utils/uuid.ts';
 
 type JsonObject = Record<string, unknown>;
@@ -7,22 +8,8 @@ type JsonObject = Record<string, unknown>;
 export interface LexicalRow {
   id: string;
   text: string;
-  type: string;
-  phonemes: string | null;
+  tokens: string;
   translations: string;
-}
-
-export interface LexicalAudioRow {
-  id: string;
-  lexical_id: string;
-  voice: string;
-  url: string;
-}
-
-export interface LexicalMediaRow {
-  id: string;
-  lexical_id: string;
-  url: string;
 }
 
 function isResponse(value: unknown): value is Response {
@@ -31,15 +18,6 @@ function isResponse(value: unknown): value is Response {
 
 function isConstraint(error: unknown): boolean {
   return error instanceof Error && /constraint|unique|foreign key/i.test(error.message);
-}
-
-function parseJsonArray(value: string): unknown[] {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 function parseJsonObject(value: string): JsonObject {
@@ -54,8 +32,20 @@ function parseJsonObject(value: string): JsonObject {
 export function parseLexical(row: LexicalRow) {
   return {
     ...row,
+    tokens: parseTokens(row.tokens),
     translations: parseJsonObject(row.translations),
   };
+}
+
+function readLexicalTokens(value: unknown, text: string, origin: string) {
+  const tokens = normalizeTokens(value, text);
+  const words = text.split(/\s+/);
+  const hasMatchingWords = tokens.length === words.length
+    && tokens.every((token, index) => token.text.toLowerCase() === words[index].toLowerCase());
+  if (!hasMatchingWords) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'tokens phải khớp đúng thứ tự các từ trong lexical', origin);
+  }
+  return tokens;
 }
 
 export async function readBody(request: Request, origin: string): Promise<JsonObject | Response> {
@@ -72,7 +62,7 @@ export async function readBody(request: Request, origin: string): Promise<JsonOb
 
 export async function getLexicalById(env: Env, id: string): Promise<LexicalRow | null> {
   return env.DB.prepare(`
-    SELECT id, text, type, phonemes, translations
+    SELECT id, text, tokens, translations
     FROM lexicals
     WHERE id = ?
   `).bind(id).first<LexicalRow>();
@@ -81,21 +71,7 @@ export async function getLexicalById(env: Env, id: string): Promise<LexicalRow |
 export async function getLexicalDetails(env: Env, lexicalId: string) {
   const lexicalRow = await getLexicalById(env, lexicalId);
   if (!lexicalRow) return null;
-
-  const [audios, images, videos] = await Promise.all([
-    env.DB.prepare('SELECT id, voice, url FROM lexical_audio WHERE lexical_id = ?').bind(lexicalId).all<LexicalAudioRow>(),
-    env.DB.prepare('SELECT id, url FROM lexical_image WHERE lexical_id = ?').bind(lexicalId).all<LexicalMediaRow>(),
-    env.DB.prepare('SELECT id, url FROM lexical_video WHERE lexical_id = ?').bind(lexicalId).all<LexicalMediaRow>(),
-  ]);
-
-  return {
-    ...parseLexical(lexicalRow),
-    media: {
-      audios: audios.results,
-      images: images.results,
-      videos: videos.results,
-    },
-  };
+  return parseLexical(lexicalRow);
 }
 
 export async function handleListLexicals(request: Request, env: Env, origin: string): Promise<Response> {
@@ -103,8 +79,6 @@ export async function handleListLexicals(request: Request, env: Env, origin: str
     const url = new URL(request.url);
     const { page, size, offset } = parsePagination(url);
     const query = url.searchParams.get('q')?.trim() ?? '';
-    const type = url.searchParams.get('type')?.trim() ?? '';
-
     const conditions: string[] = [];
     const params: (string | number)[] = [];
 
@@ -113,16 +87,11 @@ export async function handleListLexicals(request: Request, env: Env, origin: str
       params.push(`%${query.toLowerCase()}%`);
     }
 
-    if (type) {
-      conditions.push('l.type = ?');
-      params.push(type);
-    }
-
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countSql = `SELECT COUNT(*) AS total FROM lexicals l ${whereClause}`;
     const dataSql = `
-      SELECT l.id, l.text, l.type, l.phonemes, l.translations
+      SELECT l.id, l.text, l.tokens, l.translations
       FROM lexicals l
       ${whereClause}
       ORDER BY l.id DESC
@@ -161,9 +130,9 @@ export async function handleCreateLexical(request: Request, env: Env, origin: st
   const textStr = typeof body.text === 'string' ? body.text.trim().toLowerCase() : '';
   if (!textStr) return errorResponse(400, 'VALIDATION_ERROR', 'text không được để trống', origin);
 
-  const type = typeof body.type === 'string' && body.type.trim() ? body.type.trim() : 'vocabulary';
   const id = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : generateUUIDv7();
-  const phonemes = typeof body.phonemes === 'string' && body.phonemes.trim() ? body.phonemes.trim() : null;
+  const tokens = readLexicalTokens(body.tokens, textStr, origin);
+  if (isResponse(tokens)) return tokens;
 
   const translations = typeof body.translations === 'object' && body.translations !== null && !Array.isArray(body.translations)
     ? body.translations
@@ -171,9 +140,9 @@ export async function handleCreateLexical(request: Request, env: Env, origin: st
 
   try {
     await env.DB.prepare(`
-      INSERT INTO lexicals (id, text, type, phonemes, translations)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(id, textStr, type, phonemes, JSON.stringify(translations)).run();
+      INSERT INTO lexicals (id, text, tokens, translations)
+      VALUES (?, ?, ?, ?)
+    `).bind(id, textStr, JSON.stringify(tokens), JSON.stringify(translations)).run();
 
     const details = await getLexicalDetails(env, id);
     return successResponse(201, 'CREATED', details, origin);
@@ -191,10 +160,14 @@ export async function handleUpdateLexical(request: Request, env: Env, origin: st
   if (isResponse(body)) return body;
 
   const textStr = typeof body.text === 'string' ? body.text.trim().toLowerCase() : existing.text.toLowerCase();
-  const type = typeof body.type === 'string' ? body.type.trim() : existing.type;
-  const phonemes = body.phonemes === null
-    ? null
-    : typeof body.phonemes === 'string' ? body.phonemes.trim() || null : existing.phonemes;
+  const tokens = readLexicalTokens(
+    Array.isArray(body.tokens)
+      ? body.tokens
+      : textStr === existing.text ? parseTokens(existing.tokens) : undefined,
+    textStr,
+    origin,
+  );
+  if (isResponse(tokens)) return tokens;
 
   const translations = typeof body.translations === 'object' && body.translations !== null && !Array.isArray(body.translations)
     ? body.translations
@@ -203,9 +176,9 @@ export async function handleUpdateLexical(request: Request, env: Env, origin: st
   try {
     await env.DB.prepare(`
       UPDATE lexicals
-      SET text = ?, type = ?, phonemes = ?, translations = ?
+      SET text = ?, tokens = ?, translations = ?
       WHERE id = ?
-    `).bind(textStr, type, phonemes, JSON.stringify(translations), id).run();
+    `).bind(textStr, JSON.stringify(tokens), JSON.stringify(translations), id).run();
 
     const details = await getLexicalDetails(env, id);
     return successResponse(200, 'UPDATED', details, origin);

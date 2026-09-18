@@ -1,4 +1,5 @@
 import { errorResponse, successResponse } from '../../utils/response.ts';
+import { normalizeTokens, type SentenceToken } from '../../utils/tokens.ts';
 import { generateUUIDv7 } from '../../utils/uuid.ts';
 
 const MAX_JSON_BYTES = 2_000_000;
@@ -6,17 +7,6 @@ const MAX_BATCH_TEXTS = 500;
 const MAX_BATCH_STATEMENTS = 1_000;
 
 type JsonObject = Record<string, unknown>;
-
-export interface ImportMediaAudio {
-  id?: string;
-  voice: string;
-  url: string;
-}
-
-export interface ImportMedia {
-  url: string;
-  id?: string;
-}
 
 export interface ImportLexicalMapping {
   mapping_id?: string;
@@ -29,12 +19,8 @@ export interface ImportLexicalMapping {
 export interface ImportTextItem {
   id: string;
   text: string;
-  phonemes: string | null;
-  tokens: string[];
+  tokens: SentenceToken[];
   translations: Record<string, string>;
-  audios: ImportMediaAudio[];
-  images: ImportMedia[];
-  videos: ImportMedia[];
   lexicals: ImportLexicalMapping[];
 }
 
@@ -87,45 +73,9 @@ export function parseImportPayload(raw: unknown, origin: string): BatchImportPay
     if (!textStr) return errorResponse(400, 'VALIDATION_ERROR', `Item thứ ${i + 1} thiếu text`, origin);
 
     const id = cleanText(itemObj.id) ?? generateUUIDv7();
-    const phonemes = cleanText(itemObj.phonemes);
-
-    let tokens: string[];
-    if (Array.isArray(itemObj.tokens)) {
-      tokens = itemObj.tokens.map(t => String(t).trim()).filter(Boolean);
-    } else {
-      tokens = textStr.split(/\s+/).filter(Boolean);
-    }
+    const tokens = normalizeTokens(itemObj.tokens, textStr);
 
     const translations = parseTranslations(itemObj.translations);
-
-    // Media
-    const mediaObj = objectValue(itemObj.media) ?? itemObj;
-    const audios: ImportMediaAudio[] = [];
-    if (Array.isArray(mediaObj.audios)) {
-      for (const a of mediaObj.audios) {
-        const aObj = objectValue(a);
-        const url = cleanText(aObj?.url);
-        if (url) audios.push({ id: cleanText(aObj?.id) ?? generateUUIDv7(), voice: cleanText(aObj?.voice) ?? 'default', url });
-      }
-    }
-
-    const images: ImportMedia[] = [];
-    if (Array.isArray(mediaObj.images)) {
-      for (const img of mediaObj.images) {
-        const imgObj = objectValue(img);
-        const url = cleanText(imgObj?.url);
-        if (url) images.push({ id: cleanText(imgObj?.id) ?? generateUUIDv7(), url });
-      }
-    }
-
-    const videos: ImportMedia[] = [];
-    if (Array.isArray(mediaObj.videos)) {
-      for (const v of mediaObj.videos) {
-        const vObj = objectValue(v);
-        const url = cleanText(vObj?.url);
-        if (url) videos.push({ id: cleanText(vObj?.id) ?? generateUUIDv7(), url });
-      }
-    }
 
     // Mappings
     const lexicals: ImportLexicalMapping[] = [];
@@ -152,12 +102,8 @@ export function parseImportPayload(raw: unknown, origin: string): BatchImportPay
     items.push({
       id,
       text: textStr,
-      phonemes,
       tokens,
       translations,
-      audios,
-      images,
-      videos,
       lexicals,
     });
   }
@@ -241,26 +187,18 @@ export async function handleCommitBatchImport(request: Request, env: Env, origin
     for (const item of parsed.items) {
       // 1. Sentence statement
       const textSql = parsed.strategy === 'upsert'
-        ? `INSERT INTO sentences (id, text, phonemes, tokens, translations) VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET text = excluded.text, phonemes = excluded.phonemes, tokens = excluded.tokens, translations = excluded.translations`
-        : `INSERT INTO sentences (id, text, phonemes, tokens, translations) VALUES (?, ?, ?, ?, ?)`;
+        ? `INSERT INTO sentences (id, text, tokens, translations) VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET text = excluded.text, tokens = excluded.tokens, translations = excluded.translations`
+        : `INSERT INTO sentences (id, text, tokens, translations) VALUES (?, ?, ?, ?)`;
 
       statements.push(env.DB.prepare(textSql).bind(
         item.id,
         item.text,
-        item.phonemes,
         JSON.stringify(item.tokens),
         JSON.stringify(item.translations),
       ));
 
-      // 2. Media statements
-      if (item.audios.length > 0) {
-        statements.push(env.DB.prepare('DELETE FROM sentence_audio WHERE sentence_id = ?').bind(item.id));
-        for (const audio of item.audios) {
-          statements.push(env.DB.prepare('INSERT INTO sentence_audio (id, sentence_id, voice, url) VALUES (?, ?, ?, ?)').bind(audio.id ?? generateUUIDv7(), item.id, audio.voice, audio.url));
-        }
-      }
-      // 3. Mappings
+      // 2. Mappings
       if (item.lexicals.length > 0) {
         statements.push(env.DB.prepare('DELETE FROM sentence_lexicals WHERE sentence_id = ?').bind(item.id));
         for (const lex of item.lexicals) {

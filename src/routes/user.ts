@@ -1,9 +1,7 @@
 import {
-  handleGetTaxonomy,
-  handleGetTaxonomyTerms,
-  handleGetTerm,
-  handleListTaxonomies,
-} from '../features/classification/handlers.ts';
+  handleGetTopic,
+  handleListTopics,
+} from '../features/topics/handlers.ts';
 import {
   handleGetLexical,
   handleListLexicals,
@@ -64,24 +62,14 @@ export async function routeUserRequest(
     if (request.method === 'GET') return handleGetText(env, origin, textMatch[1]);
   }
 
-  // Taxonomies & Terms User Routes
-  if (path === '/taxonomies') {
-    if (request.method === 'GET') return handleListTaxonomies(request, env, origin);
+  // Topics User Routes
+  if (path === '/topics') {
+    if (request.method === 'GET') return handleListTopics(env, origin);
   }
 
-  const taxonomyTermsMatch = path.match(/^\/taxonomies\/([^/]+)\/terms$/);
-  if (taxonomyTermsMatch) {
-    if (request.method === 'GET') return handleGetTaxonomyTerms(env, origin, taxonomyTermsMatch[1]);
-  }
-
-  const taxonomyMatch = path.match(/^\/taxonomies\/([^/]+)$/);
-  if (taxonomyMatch) {
-    if (request.method === 'GET') return handleGetTaxonomy(env, origin, taxonomyMatch[1]);
-  }
-
-  const termMatch = path.match(/^\/(?:terms|taxonomy-terms)\/([^/]+)$/);
-  if (termMatch) {
-    if (request.method === 'GET') return handleGetTerm(env, origin, termMatch[1]);
+  const topicMatch = path.match(/^\/topics\/([^/]+)$/);
+  if (topicMatch) {
+    if (request.method === 'GET') return handleGetTopic(env, origin, topicMatch[1]);
   }
 
   return errorResponse(404, 'NOT_FOUND', 'User endpoint not found', origin);
