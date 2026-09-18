@@ -2,9 +2,11 @@
   "rules": [
     {
       "allowed": {
-        "origins": [
-          "http://localhost:5173",
-          "https://english-editor.hocnhe.com",
+      "origins": [
+        "http://localhost:5173",
+        "http://localhost:5176",
+        "http://127.0.0.1:5176",
+        "https://english-editor.hocnhe.com",
           "https://english-admin.hocnhe.com"
         ],
         "methods": ["PUT", "GET", "HEAD"],
