@@ -23,20 +23,9 @@ import {
   handleUpdateSentenceLexicals,
 } from '../features/sentences/handlers.ts';
 import {
-  handleBatchDeleteTexts,
-} from '../features/texts/batch.ts';
-import {
-  handleCreateText,
-  handleDeleteText,
-  handleGetText,
-  handleListTexts,
-  handleUpdateText,
-  handleUpdateTextLexicals,
-} from '../features/texts/handlers.ts';
-import {
   handleCommitBatchImport,
   handlePreviewBatchImport,
-} from '../features/texts/import.ts';
+} from '../features/sentences/import.ts';
 import { errorResponse } from '../utils/response.ts';
 
 function methodNotAllowed(origin: string): Response {
@@ -122,42 +111,6 @@ export async function routeAdminRequest(
     if (request.method === 'GET') return handleGetLexical(env, origin, lexicalMatch[1]);
     if (request.method === 'PUT') return handleUpdateLexical(request, env, origin, lexicalMatch[1]);
     if (request.method === 'DELETE') return handleDeleteLexical(env, origin, lexicalMatch[1]);
-    return methodNotAllowed(origin);
-  }
-
-  // Texts Legacy Batch Routes
-  if (path === '/texts/import/preview' || path === '/texts/batch-import/preview') {
-    return request.method === 'POST' ? handlePreviewBatchImport(request, env, origin) : methodNotAllowed(origin);
-  }
-
-  if (path === '/texts/import' || path === '/texts/batch-import/commit') {
-    return request.method === 'POST' ? handleCommitBatchImport(request, env, origin) : methodNotAllowed(origin);
-  }
-
-  if (path === '/texts/batch-delete') {
-    return request.method === 'POST' ? handleBatchDeleteTexts(request, env, origin) : methodNotAllowed(origin);
-  }
-
-  // Text Legacy Lexicals Route
-  const textLexicalsMatch = path.match(/^\/texts\/([^/]+)\/lexicals$/);
-  if (textLexicalsMatch) {
-    return request.method === 'PUT'
-      ? handleUpdateTextLexicals(request, env, origin, textLexicalsMatch[1])
-      : methodNotAllowed(origin);
-  }
-
-  // Texts Legacy CRUD Routes
-  if (path === '/texts') {
-    if (request.method === 'GET') return handleListTexts(request, env, origin);
-    if (request.method === 'POST') return handleCreateText(request, env, origin);
-    return methodNotAllowed(origin);
-  }
-
-  const textMatch = path.match(/^\/texts\/([^/]+)$/);
-  if (textMatch) {
-    if (request.method === 'GET') return handleGetText(env, origin, textMatch[1]);
-    if (request.method === 'PUT') return handleUpdateText(request, env, origin, textMatch[1]);
-    if (request.method === 'DELETE') return handleDeleteText(env, origin, textMatch[1]);
     return methodNotAllowed(origin);
   }
 

@@ -10,10 +10,6 @@ import {
   handleGetSentence,
   handleListSentences,
 } from '../features/sentences/handlers.ts';
-import {
-  handleGetText,
-  handleListTexts,
-} from '../features/texts/handlers.ts';
 import { errorResponse } from '../utils/response.ts';
 
 export async function routeUserRequest(
@@ -50,16 +46,6 @@ export async function routeUserRequest(
   const lexicalMatch = path.match(/^\/lexicals\/([^/]+)$/);
   if (lexicalMatch) {
     if (request.method === 'GET') return handleGetLexical(env, origin, lexicalMatch[1]);
-  }
-
-  // Texts Legacy User Routes
-  if (path === '/texts') {
-    if (request.method === 'GET') return handleListTexts(request, env, origin);
-  }
-
-  const textMatch = path.match(/^\/texts\/([^/]+)$/);
-  if (textMatch) {
-    if (request.method === 'GET') return handleGetText(env, origin, textMatch[1]);
   }
 
   // Topics User Routes
