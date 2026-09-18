@@ -7,6 +7,8 @@
 --
 -- `pronunciation` stores Kokoro replacement markup only when normal
 -- text-to-speech is not sufficient; NULL means send `text` to Kokoro unchanged.
+-- `translations` keeps localized learner-facing text by locale, for example
+-- `{ "vi": { "text": "Chọn đáp án đúng." } }`.
 -- `audio` is the final public URL after generated audio has been uploaded to
 -- R2. Audio is always stored at
 -- `instructions/{id}/{engine}-{voice}.opus`, so regenerating the same
@@ -19,6 +21,9 @@
 CREATE TABLE english_instructions (
   id TEXT PRIMARY KEY NOT NULL CHECK (length(trim(id)) > 0),
   text TEXT NOT NULL CHECK (length(trim(text)) > 0),
+  translations TEXT NOT NULL DEFAULT '{}' CHECK (
+    json_valid(translations) AND json_type(translations) = 'object'
+  ),
   pronunciation TEXT,
   voice_id TEXT NOT NULL DEFAULT 'kokoro-af_heart',
   audio TEXT,
@@ -27,3 +32,23 @@ CREATE TABLE english_instructions (
 
 CREATE INDEX idx_english_instructions_text
   ON english_instructions(text COLLATE NOCASE);
+
+INSERT INTO english_instructions (id, text, translations) VALUES
+  ('019c9a80-0000-7000-8000-000000000001', 'Listen and repeat.', '{"vi":{"text":"Nghe và nhắc lại."}}'),
+  ('019c9a80-0000-7000-8000-000000000002', 'Listen carefully.', '{"vi":{"text":"Nghe thật kỹ."}}'),
+  ('019c9a80-0000-7000-8000-000000000003', 'Look and listen.', '{"vi":{"text":"Nhìn và nghe."}}'),
+  ('019c9a80-0000-7000-8000-000000000004', 'Choose the correct answer.', '{"vi":{"text":"Chọn đáp án đúng."}}'),
+  ('019c9a80-0000-7000-8000-000000000005', 'Choose the correct word.', '{"vi":{"text":"Chọn từ đúng."}}'),
+  ('019c9a80-0000-7000-8000-000000000006', 'Choose the correct meaning.', '{"vi":{"text":"Chọn nghĩa đúng."}}'),
+  ('019c9a80-0000-7000-8000-000000000007', 'Match the word with its meaning.', '{"vi":{"text":"Ghép từ với nghĩa của từ."}}'),
+  ('019c9a80-0000-7000-8000-000000000008', 'Find the matching pair.', '{"vi":{"text":"Tìm cặp phù hợp."}}'),
+  ('019c9a80-0000-7000-8000-000000000009', 'Put the words in the correct order.', '{"vi":{"text":"Sắp xếp các từ theo đúng thứ tự."}}'),
+  ('019c9a80-0000-7000-8000-000000000010', 'Complete the sentence.', '{"vi":{"text":"Hoàn thành câu."}}'),
+  ('019c9a80-0000-7000-8000-000000000011', 'Fill in the blank.', '{"vi":{"text":"Điền vào chỗ trống."}}'),
+  ('019c9a80-0000-7000-8000-000000000012', 'Type the answer.', '{"vi":{"text":"Gõ đáp án."}}'),
+  ('019c9a80-0000-7000-8000-000000000013', 'Say the word.', '{"vi":{"text":"Đọc từ."}}'),
+  ('019c9a80-0000-7000-8000-000000000014', 'Read the sentence aloud.', '{"vi":{"text":"Đọc to câu."}}'),
+  ('019c9a80-0000-7000-8000-000000000015', 'Try again.', '{"vi":{"text":"Thử lại nhé."}}'),
+  ('019c9a80-0000-7000-8000-000000000016', 'Well done!', '{"vi":{"text":"Bạn làm rất tốt!"}}'),
+  ('019c9a80-0000-7000-8000-000000000017', 'Correct!', '{"vi":{"text":"Chính xác!"}}'),
+  ('019c9a80-0000-7000-8000-000000000018', 'Not quite. Try again.', '{"vi":{"text":"Chưa đúng lắm. Thử lại nhé."}}');
