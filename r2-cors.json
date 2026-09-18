@@ -1,0 +1,17 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "http://localhost:5173",
+          "https://english-editor.hocnhe.com",
+          "https://english-admin.hocnhe.com"
+        ],
+        "methods": ["PUT", "GET", "HEAD"],
+        "headers": ["Content-Type"],
+        "exposeHeaders": ["ETag"],
+        "maxAgeSeconds": 3600
+      }
+    }
+  ]
+}
