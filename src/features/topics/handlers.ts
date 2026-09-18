@@ -6,12 +6,14 @@ interface TopicRow {
   id: number;
   name: string;
   description: string | null;
+  image: string | null;
   translations: string;
 }
 
 interface TopicInput {
   name: string;
   description: string | null;
+  image: string | null;
   translations: Record<string, { name?: string; description?: string }>;
 }
 
@@ -85,9 +87,13 @@ async function readTopicInput(request: Request, origin: string): Promise<TopicIn
     ? null
     : typeof body.description === 'string' ? body.description.trim() || null : undefined;
   if (description === undefined) return errorResponse(400, 'VALIDATION_ERROR', 'description phải là chuỗi hoặc null', origin);
+  const image = body.image === undefined || body.image === null
+    ? null
+    : typeof body.image === 'string' ? body.image.trim() || null : undefined;
+  if (image === undefined) return errorResponse(400, 'VALIDATION_ERROR', 'image phải là chuỗi hoặc null', origin);
   const translations = readTranslations(body.translations, origin);
   if (isResponse(translations)) return translations;
-  return { name, description, translations };
+  return { name, description, image, translations };
 }
 
 function parseTopicId(value: string, origin: string): number | Response {
@@ -98,7 +104,7 @@ function parseTopicId(value: string, origin: string): number | Response {
 
 async function getTopic(env: Env, id: number): Promise<TopicRow | null> {
   return env.DB.prepare(`
-    SELECT id, name, description, translations
+    SELECT id, name, description, image, translations
     FROM english_kid_topic
     WHERE id = ?
   `).bind(id).first<TopicRow>();
@@ -107,7 +113,7 @@ async function getTopic(env: Env, id: number): Promise<TopicRow | null> {
 export async function handleListTopics(env: Env, origin: string): Promise<Response> {
   try {
     const rows = await env.DB.prepare(`
-      SELECT id, name, description, translations
+      SELECT id, name, description, image, translations
       FROM english_kid_topic
       ORDER BY id ASC
     `).all<TopicRow>();
@@ -134,9 +140,9 @@ export async function handleCreateTopic(request: Request, env: Env, origin: stri
   if (isResponse(input)) return input;
   try {
     const result = await env.DB.prepare(`
-      INSERT INTO english_kid_topic (name, description, translations)
-      VALUES (?, ?, ?)
-    `).bind(input.name, input.description, JSON.stringify(input.translations)).run();
+      INSERT INTO english_kid_topic (name, description, image, translations)
+      VALUES (?, ?, ?, ?)
+    `).bind(input.name, input.description, input.image, JSON.stringify(input.translations)).run();
     const topic = await getTopic(env, Number(result.meta.last_row_id));
     return successResponse(201, 'CREATED', topic ? parseTopic(topic) : undefined, origin);
   } catch (error) {
@@ -153,9 +159,9 @@ export async function handleUpdateTopic(request: Request, env: Env, origin: stri
     if (!await getTopic(env, id)) return errorResponse(404, 'NOT_FOUND', 'Chủ đề không tồn tại', origin);
     await env.DB.prepare(`
       UPDATE english_kid_topic
-      SET name = ?, description = ?, translations = ?
+      SET name = ?, description = ?, image = ?, translations = ?
       WHERE id = ?
-    `).bind(input.name, input.description, JSON.stringify(input.translations), id).run();
+    `).bind(input.name, input.description, input.image, JSON.stringify(input.translations), id).run();
     const topic = await getTopic(env, id);
     return successResponse(200, 'UPDATED', topic ? parseTopic(topic) : undefined, origin);
   } catch (error) {
