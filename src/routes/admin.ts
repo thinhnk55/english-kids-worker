@@ -26,6 +26,11 @@ import {
   handleCommitBatchImport,
   handlePreviewBatchImport,
 } from '../features/sentences/import.ts';
+import {
+  confirmTopicImage,
+  createTopicImagePresign,
+  deleteTopicImageAsset,
+} from '../features/topics/media-handlers.ts';
 import { errorResponse } from '../utils/response.ts';
 
 function methodNotAllowed(origin: string): Response {
@@ -50,6 +55,20 @@ export async function routeAdminRequest(
   if (path === '/topics') {
     if (request.method === 'GET') return handleListTopics(env, origin);
     if (request.method === 'POST') return handleCreateTopic(request, env, origin);
+    return methodNotAllowed(origin);
+  }
+
+  const topicImagePresignMatch = path.match(/^\/topics\/([^/]+)\/image\/presign$/);
+  if (topicImagePresignMatch) {
+    return request.method === 'POST'
+      ? createTopicImagePresign(request, env, origin, topicImagePresignMatch[1])
+      : methodNotAllowed(origin);
+  }
+
+  const topicImageMatch = path.match(/^\/topics\/([^/]+)\/image$/);
+  if (topicImageMatch) {
+    if (request.method === 'POST') return confirmTopicImage(env, origin, topicImageMatch[1]);
+    if (request.method === 'DELETE') return deleteTopicImageAsset(env, origin, topicImageMatch[1]);
     return methodNotAllowed(origin);
   }
 
