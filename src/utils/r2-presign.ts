@@ -79,7 +79,7 @@ export function instructionAudioUrl(env: Env, instructionId: string, voiceId: st
 async function deleteAsset(env: Env, url: string | null): Promise<void> {
   if (!url || !env.ASSETS) return;
   const baseUrl = env.ASSET_BASE_URL.replace(/\/$/u, '');
-  if (url.startsWith(`${baseUrl}/`)) await env.ASSETS.delete(url.slice(baseUrl.length + 1)).catch(console.error);
+  if (url.startsWith(`${baseUrl}/`)) await env.ASSETS.delete(url.slice(baseUrl.length + 1));
 }
 
 export async function deleteTopicImage(env: Env, url: string | null): Promise<void> {
