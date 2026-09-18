@@ -10,7 +10,6 @@ interface EnglishInstruction {
   text: string;
   translations: string;
   pronunciation: string | null;
-  engine: string;
   voice_id: string;
   audio: string | null;
 }
@@ -19,13 +18,11 @@ interface EnglishInstructionInput {
   text: string;
   translations: Record<string, { text?: string }>;
   pronunciation: string | null;
-  engine: string;
   voice_id: string;
 }
 
-const DEFAULT_ENGINE = 'kokoro';
-const DEFAULT_VOICE_ID = 'af_heart';
-const ENGINE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
+const DEFAULT_VOICE_ID = 'kokoro-af_heart';
+const VOICE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]+-[A-Za-z0-9][A-Za-z0-9_-]*$/u;
 
 function isResponse(value: unknown): value is Response {
   return value instanceof Response;
@@ -99,26 +96,19 @@ async function readInput(request: Request, origin: string): Promise<EnglishInstr
   if (isResponse(translations)) return translations;
   const pronunciation = optionalText(body.pronunciation, 'pronunciation', origin);
   if (isResponse(pronunciation)) return pronunciation;
-  const engine = body.engine === undefined || body.engine === null
-    ? DEFAULT_ENGINE
-    : optionalText(body.engine, 'engine', origin);
-  if (isResponse(engine)) return engine;
-  if (!engine || !ENGINE_PATTERN.test(engine)) {
-    return errorResponse(400, 'VALIDATION_ERROR', 'engine không hợp lệ, ví dụ kokoro', origin);
-  }
   const voiceId = body.voice_id === undefined || body.voice_id === null
     ? DEFAULT_VOICE_ID
     : optionalText(body.voice_id, 'voice_id', origin);
   if (isResponse(voiceId)) return voiceId;
-  if (!voiceId || !ENGINE_PATTERN.test(voiceId)) {
-    return errorResponse(400, 'VALIDATION_ERROR', 'voice_id không hợp lệ, ví dụ af_heart', origin);
+  if (!voiceId || !VOICE_ID_PATTERN.test(voiceId)) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'voice_id phải có dạng engine-voice_id, ví dụ kokoro-af_heart', origin);
   }
-  return { text, translations, pronunciation, engine, voice_id: voiceId };
+  return { text, translations, pronunciation, voice_id: voiceId };
 }
 
 async function findInstruction(env: Env, id: string): Promise<EnglishInstruction | null> {
   return env.DB.prepare(`
-    SELECT id, text, translations, pronunciation, engine, voice_id, audio
+    SELECT id, text, translations, pronunciation, voice_id, audio
     FROM english_instructions
     WHERE id = ?
   `).bind(id).first<EnglishInstruction>();
@@ -134,7 +124,7 @@ export async function handleListEnglishInstructions(request: Request, env: Env, 
     const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM english_instructions ${where}`)
       .bind(...bindings).first<{ total: number }>();
     const rows = await env.DB.prepare(`
-      SELECT id, text, translations, pronunciation, engine, voice_id, audio
+      SELECT id, text, translations, pronunciation, voice_id, audio
       FROM english_instructions
       ${where}
       ORDER BY id DESC
@@ -162,9 +152,9 @@ export async function handleCreateEnglishInstruction(request: Request, env: Env,
   const id = generateUUIDv7();
   try {
     await env.DB.prepare(`
-      INSERT INTO english_instructions (id, text, translations, pronunciation, engine, voice_id)
-    VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(id, input.text, JSON.stringify(input.translations), input.pronunciation, input.engine, input.voice_id).run();
+      INSERT INTO english_instructions (id, text, translations, pronunciation, voice_id)
+    VALUES (?, ?, ?, ?, ?)
+    `).bind(id, input.text, JSON.stringify(input.translations), input.pronunciation, input.voice_id).run();
     const instruction = await findInstruction(env, id);
     return successResponse(201, 'CREATED', instruction ? parseInstruction(instruction) : undefined, origin);
   } catch (error) {
@@ -182,14 +172,13 @@ export async function handleUpdateEnglishInstruction(request: Request, env: Env,
     const mustReplaceAudio = existing.text !== input.text
       || JSON.stringify(parseTranslations(existing.translations)) !== JSON.stringify(input.translations)
       || existing.pronunciation !== input.pronunciation
-      || existing.engine !== input.engine
       || existing.voice_id !== input.voice_id;
     if (mustReplaceAudio) await deleteInstructionAudio(env, existing.audio);
     await env.DB.prepare(`
       UPDATE english_instructions
-      SET text = ?, translations = ?, pronunciation = ?, engine = ?, voice_id = ?, audio = ?
+      SET text = ?, translations = ?, pronunciation = ?, voice_id = ?, audio = ?
       WHERE id = ?
-    `).bind(input.text, JSON.stringify(input.translations), input.pronunciation, input.engine, input.voice_id, mustReplaceAudio ? null : existing.audio, id).run();
+    `).bind(input.text, JSON.stringify(input.translations), input.pronunciation, input.voice_id, mustReplaceAudio ? null : existing.audio, id).run();
     const instruction = await findInstruction(env, id);
     return successResponse(200, 'UPDATED', instruction ? parseInstruction(instruction) : undefined, origin);
   } catch (error) {
@@ -223,7 +212,7 @@ export async function handleBatchDeleteEnglishInstructions(request: Request, env
   try {
     const placeholders = ids.map(() => '?').join(', ');
     const existing = await env.DB.prepare(`
-      SELECT id, text, translations, pronunciation, engine, voice_id, audio
+      SELECT id, text, translations, pronunciation, voice_id, audio
       FROM english_instructions
       WHERE id IN (${placeholders})
     `).bind(...ids).all<EnglishInstruction>();

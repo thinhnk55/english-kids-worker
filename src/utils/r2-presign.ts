@@ -68,12 +68,12 @@ export function topicImageUrl(env: Env, topicId: number): string {
   return `${env.ASSET_BASE_URL.replace(/\/$/u, '')}/topics/${topicImageKey(topicId)}`;
 }
 
-export function instructionAudioKey(instructionId: string, engine: string, voiceId: string): string {
-  return `instructions/${instructionId}/${engine}-${voiceId}.opus`;
+export function instructionAudioKey(instructionId: string, voiceId: string): string {
+  return `instructions/${instructionId}/${voiceId}.opus`;
 }
 
-export function instructionAudioUrl(env: Env, instructionId: string, engine: string, voiceId: string): string {
-  return `${env.ASSET_BASE_URL.replace(/\/$/u, '')}/${instructionAudioKey(instructionId, engine, voiceId)}`;
+export function instructionAudioUrl(env: Env, instructionId: string, voiceId: string): string {
+  return `${env.ASSET_BASE_URL.replace(/\/$/u, '')}/${instructionAudioKey(instructionId, voiceId)}`;
 }
 
 async function deleteAsset(env: Env, url: string | null): Promise<void> {
