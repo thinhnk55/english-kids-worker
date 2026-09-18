@@ -173,7 +173,7 @@ export async function handleUpdateEnglishInstruction(request: Request, env: Env,
       || JSON.stringify(parseTranslations(existing.translations)) !== JSON.stringify(input.translations)
       || existing.pronunciation !== input.pronunciation
       || existing.voice_id !== input.voice_id;
-    if (mustReplaceAudio) await deleteInstructionAudio(env, existing.audio);
+    if (mustReplaceAudio) await deleteInstructionAudio(env, existing.audio, existing.id, existing.voice_id);
     await env.DB.prepare(`
       UPDATE english_instructions
       SET text = ?, translations = ?, pronunciation = ?, voice_id = ?, audio = ?
@@ -191,7 +191,7 @@ export async function handleDeleteEnglishInstruction(env: Env, origin: string, i
   try {
     const existing = await findInstruction(env, id);
     if (!existing) return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy câu hướng dẫn', origin);
-    await deleteInstructionAudio(env, existing.audio);
+    await deleteInstructionAudio(env, existing.audio, existing.id, existing.voice_id);
     const result = await env.DB.prepare('DELETE FROM english_instructions WHERE id = ?').bind(id).run();
     if (!result.meta.changes) return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy câu hướng dẫn', origin);
     return successResponse(200, 'DELETED', undefined, origin);
@@ -216,7 +216,7 @@ export async function handleBatchDeleteEnglishInstructions(request: Request, env
       FROM english_instructions
       WHERE id IN (${placeholders})
     `).bind(...ids).all<EnglishInstruction>();
-    await Promise.all(existing.results.map(instruction => deleteInstructionAudio(env, instruction.audio)));
+    await Promise.all(existing.results.map(instruction => deleteInstructionAudio(env, instruction.audio, instruction.id, instruction.voice_id)));
     const result = await env.DB.prepare(`DELETE FROM english_instructions WHERE id IN (${placeholders})`).bind(...ids).run();
     return successResponse(200, 'DELETED', { count: result.meta.changes }, origin);
   } catch (error) {

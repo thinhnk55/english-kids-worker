@@ -86,6 +86,11 @@ export async function deleteTopicImage(env: Env, url: string | null): Promise<vo
   return deleteAsset(env, url);
 }
 
-export async function deleteInstructionAudio(env: Env, url: string | null): Promise<void> {
-  return deleteAsset(env, url);
+export async function deleteInstructionAudio(env: Env, url: string | null, instructionId?: string, voiceId?: string): Promise<void> {
+  if (!env.ASSETS) return;
+  const keys = new Set<string>();
+  const baseUrl = env.ASSET_BASE_URL.replace(/\/$/u, '');
+  if (url?.startsWith(`${baseUrl}/`)) keys.add(url.slice(baseUrl.length + 1));
+  if (instructionId && voiceId) keys.add(instructionAudioKey(instructionId, voiceId));
+  await Promise.all([...keys].map(key => env.ASSETS.delete(key)));
 }

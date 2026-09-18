@@ -50,7 +50,7 @@ export async function confirmInstructionAudio(env: Env, origin: string, id: stri
   const object = await env.ASSETS.head(key);
   if (!object) return errorResponse(400, 'VALIDATION_ERROR', 'Chưa tìm thấy file audio đã tải lên', origin);
   const audio = instructionAudioUrl(env, instruction.id, instruction.voice_id);
-  if (instruction.audio && instruction.audio !== audio) await deleteInstructionAudio(env, instruction.audio);
+  if (instruction.audio && instruction.audio !== audio) await deleteInstructionAudio(env, instruction.audio, instruction.id, instruction.voice_id);
   await env.DB.prepare('UPDATE english_instructions SET audio = ? WHERE id = ?').bind(audio, id).run();
   return successResponse(200, 'UPDATED', { id: 'audio', url: audio, voice_id: instruction.voice_id }, origin);
 }
@@ -58,7 +58,7 @@ export async function confirmInstructionAudio(env: Env, origin: string, id: stri
 export async function deleteInstructionAudioAsset(env: Env, origin: string, id: string): Promise<Response> {
   const instruction = await findInstruction(env, id);
   if (!instruction) return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy câu hướng dẫn', origin);
-  await deleteInstructionAudio(env, instruction.audio);
+  await deleteInstructionAudio(env, instruction.audio, instruction.id, instruction.voice_id);
   await env.DB.prepare('UPDATE english_instructions SET audio = NULL WHERE id = ?').bind(id).run();
   return successResponse(200, 'DELETED', { id: 'audio' }, origin);
 }
