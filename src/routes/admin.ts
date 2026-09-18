@@ -6,26 +6,18 @@ import {
   handleUpdateTopic,
 } from '../features/topics/handlers.ts';
 import {
-  handleBatchDeleteLexicals,
-  handleCreateLexical,
-  handleDeleteLexical,
-  handleGetLexical,
-  handleListLexicals,
-  handleUpdateLexical,
-} from '../features/lexicals/handlers.ts';
+  handleBatchDeleteEnglishInstructions,
+  handleCreateEnglishInstruction,
+  handleDeleteEnglishInstruction,
+  handleGetEnglishInstruction,
+  handleListEnglishInstructions,
+  handleUpdateEnglishInstruction,
+} from '../features/english-instructions/handlers.ts';
 import {
-  handleBatchDeleteSentences,
-  handleCreateSentence,
-  handleDeleteSentence,
-  handleGetSentence,
-  handleListSentences,
-  handleUpdateSentence,
-  handleUpdateSentenceLexicals,
-} from '../features/sentences/handlers.ts';
-import {
-  handleCommitBatchImport,
-  handlePreviewBatchImport,
-} from '../features/sentences/import.ts';
+  confirmInstructionAudio,
+  createInstructionAudioPresign,
+  deleteInstructionAudioAsset,
+} from '../features/english-instructions/media-handlers.ts';
 import {
   confirmTopicImage,
   createTopicImagePresign,
@@ -80,56 +72,36 @@ export async function routeAdminRequest(
     return methodNotAllowed(origin);
   }
 
-  // Sentences Routes
-  if (path === '/sentences/import/preview' || path === '/sentences/batch-import/preview') {
-    return request.method === 'POST' ? handlePreviewBatchImport(request, env, origin) : methodNotAllowed(origin);
+  // English Instruction Routes
+  if (path === '/english-instructions/batch-delete') {
+    return request.method === 'POST' ? handleBatchDeleteEnglishInstructions(request, env, origin) : methodNotAllowed(origin);
   }
 
-  if (path === '/sentences/import' || path === '/sentences/batch-import/commit') {
-    return request.method === 'POST' ? handleCommitBatchImport(request, env, origin) : methodNotAllowed(origin);
+  if (path === '/english-instructions') {
+    if (request.method === 'GET') return handleListEnglishInstructions(request, env, origin);
+    if (request.method === 'POST') return handleCreateEnglishInstruction(request, env, origin);
+    return methodNotAllowed(origin);
   }
 
-  if (path === '/sentences/batch-delete') {
-    return request.method === 'POST' ? handleBatchDeleteSentences(request, env, origin) : methodNotAllowed(origin);
-  }
-
-  const sentenceLexicalsMatch = path.match(/^\/sentences\/([^/]+)\/lexicals$/);
-  if (sentenceLexicalsMatch) {
-    return request.method === 'PUT'
-      ? handleUpdateSentenceLexicals(request, env, origin, sentenceLexicalsMatch[1])
+  const instructionAudioPresignMatch = path.match(/^\/english-instructions\/([^/]+)\/audio\/presign$/);
+  if (instructionAudioPresignMatch) {
+    return request.method === 'POST'
+      ? createInstructionAudioPresign(request, env, origin, instructionAudioPresignMatch[1])
       : methodNotAllowed(origin);
   }
 
-  if (path === '/sentences') {
-    if (request.method === 'GET') return handleListSentences(request, env, origin);
-    if (request.method === 'POST') return handleCreateSentence(request, env, origin);
+  const instructionAudioMatch = path.match(/^\/english-instructions\/([^/]+)\/audio$/);
+  if (instructionAudioMatch) {
+    if (request.method === 'POST') return confirmInstructionAudio(env, origin, instructionAudioMatch[1]);
+    if (request.method === 'DELETE') return deleteInstructionAudioAsset(env, origin, instructionAudioMatch[1]);
     return methodNotAllowed(origin);
   }
 
-  const sentenceMatch = path.match(/^\/sentences\/([^/]+)$/);
-  if (sentenceMatch) {
-    if (request.method === 'GET') return handleGetSentence(env, origin, sentenceMatch[1]);
-    if (request.method === 'PUT') return handleUpdateSentence(request, env, origin, sentenceMatch[1]);
-    if (request.method === 'DELETE') return handleDeleteSentence(env, origin, sentenceMatch[1]);
-    return methodNotAllowed(origin);
-  }
-
-  // Lexicals Routes
-  if (path === '/lexicals/batch-delete') {
-    return request.method === 'POST' ? handleBatchDeleteLexicals(request, env, origin) : methodNotAllowed(origin);
-  }
-
-  if (path === '/lexicals') {
-    if (request.method === 'GET') return handleListLexicals(request, env, origin);
-    if (request.method === 'POST') return handleCreateLexical(request, env, origin);
-    return methodNotAllowed(origin);
-  }
-
-  const lexicalMatch = path.match(/^\/lexicals\/([^/]+)$/);
-  if (lexicalMatch) {
-    if (request.method === 'GET') return handleGetLexical(env, origin, lexicalMatch[1]);
-    if (request.method === 'PUT') return handleUpdateLexical(request, env, origin, lexicalMatch[1]);
-    if (request.method === 'DELETE') return handleDeleteLexical(env, origin, lexicalMatch[1]);
+  const instructionMatch = path.match(/^\/english-instructions\/([^/]+)$/);
+  if (instructionMatch) {
+    if (request.method === 'GET') return handleGetEnglishInstruction(env, origin, instructionMatch[1]);
+    if (request.method === 'PUT') return handleUpdateEnglishInstruction(request, env, origin, instructionMatch[1]);
+    if (request.method === 'DELETE') return handleDeleteEnglishInstruction(env, origin, instructionMatch[1]);
     return methodNotAllowed(origin);
   }
 

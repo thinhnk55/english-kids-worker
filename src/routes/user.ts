@@ -3,13 +3,9 @@ import {
   handleListTopics,
 } from '../features/topics/handlers.ts';
 import {
-  handleGetLexical,
-  handleListLexicals,
-} from '../features/lexicals/handlers.ts';
-import {
-  handleGetSentence,
-  handleListSentences,
-} from '../features/sentences/handlers.ts';
+  handleGetEnglishInstruction,
+  handleListEnglishInstructions,
+} from '../features/english-instructions/handlers.ts';
 import { errorResponse } from '../utils/response.ts';
 
 export async function routeUserRequest(
@@ -28,24 +24,14 @@ export async function routeUserRequest(
     });
   }
 
-  // Sentences User Routes
-  if (path === '/sentences') {
-    if (request.method === 'GET') return handleListSentences(request, env, origin);
+  // English Instruction Routes
+  if (path === '/english-instructions') {
+    if (request.method === 'GET') return handleListEnglishInstructions(request, env, origin);
   }
 
-  const sentenceMatch = path.match(/^\/sentences\/([^/]+)$/);
-  if (sentenceMatch) {
-    if (request.method === 'GET') return handleGetSentence(env, origin, sentenceMatch[1]);
-  }
-
-  // Lexicals User Routes
-  if (path === '/lexicals') {
-    if (request.method === 'GET') return handleListLexicals(request, env, origin);
-  }
-
-  const lexicalMatch = path.match(/^\/lexicals\/([^/]+)$/);
-  if (lexicalMatch) {
-    if (request.method === 'GET') return handleGetLexical(env, origin, lexicalMatch[1]);
+  const instructionMatch = path.match(/^\/english-instructions\/([^/]+)$/);
+  if (instructionMatch) {
+    if (request.method === 'GET') return handleGetEnglishInstruction(env, origin, instructionMatch[1]);
   }
 
   // Topics User Routes

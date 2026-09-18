@@ -35,12 +35,16 @@ async function signingKey(secret: string, date: string): Promise<ArrayBuffer> {
 }
 
 export async function createPresignedPutUrl(key: string, contentType: string, env: Env): Promise<{ uploadUrl: string; expiresIn: number } | null> {
+  return createPresignedPutUrlForObject(`topics/${key}`, contentType, env);
+}
+
+export async function createPresignedPutUrlForObject(objectKey: string, contentType: string, env: Env): Promise<{ uploadUrl: string; expiresIn: number } | null> {
   if (!env.R2_ACCOUNT_ID || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY) return null;
   const now = new Date();
   const date = now.toISOString().slice(0, 10).replace(/-/g, '');
   const amzDate = `${date}T${now.toISOString().slice(11, 19).replace(/:/g, '')}Z`;
   const host = `${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-  const path = `/${['english-kids-bucket', 'topics', ...key.split('/')].map(encode).join('/')}`;
+  const path = `/${['english-kids-bucket', ...objectKey.split('/')].map(encode).join('/')}`;
   const credential = `${env.R2_ACCESS_KEY_ID}/${date}/${REGION}/${SERVICE}/aws4_request`;
   const query = {
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
@@ -64,8 +68,24 @@ export function topicImageUrl(env: Env, topicId: number): string {
   return `${env.ASSET_BASE_URL.replace(/\/$/u, '')}/topics/${topicImageKey(topicId)}`;
 }
 
-export async function deleteTopicImage(env: Env, url: string | null): Promise<void> {
+export function instructionAudioKey(instructionId: string, voiceId: string): string {
+  return `instructions/${instructionId}/${voiceId}.opus`;
+}
+
+export function instructionAudioUrl(env: Env, instructionId: string, voiceId: string): string {
+  return `${env.ASSET_BASE_URL.replace(/\/$/u, '')}/${instructionAudioKey(instructionId, voiceId)}`;
+}
+
+async function deleteAsset(env: Env, url: string | null): Promise<void> {
   if (!url || !env.ASSETS) return;
   const baseUrl = env.ASSET_BASE_URL.replace(/\/$/u, '');
   if (url.startsWith(`${baseUrl}/`)) await env.ASSETS.delete(url.slice(baseUrl.length + 1)).catch(console.error);
+}
+
+export async function deleteTopicImage(env: Env, url: string | null): Promise<void> {
+  return deleteAsset(env, url);
+}
+
+export async function deleteInstructionAudio(env: Env, url: string | null): Promise<void> {
+  return deleteAsset(env, url);
 }
