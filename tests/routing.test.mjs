@@ -13,7 +13,7 @@ test('GET / or /info returns worker info', async () => {
 
   const data = await res.json();
   assert.equal(data.name, 'english-kids-worker');
-  assert.equal(data.version, '1.7.3');
+  assert.equal(data.version, '1.7.4');
 });
 
 test('OPTIONS request returns CORS headers', async () => {

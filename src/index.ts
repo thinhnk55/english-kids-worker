@@ -17,7 +17,7 @@ export default {
     if (pathname === '/' || pathname === '/info') {
       return new Response(JSON.stringify({
         name: 'english-kids-worker',
-        version: '1.7.3',
+        version: '1.7.4',
         api: {
           admin: '/v1/admin',
           user: '/v1',
