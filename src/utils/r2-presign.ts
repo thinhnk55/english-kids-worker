@@ -76,6 +76,22 @@ export function instructionAudioUrl(env: Env, instructionId: string, voiceId: st
   return `${env.ASSET_BASE_URL.replace(/\/$/u, '')}/${instructionAudioKey(instructionId, voiceId)}`;
 }
 
+export function lexicalGroupImageKey(groupId: string): string {
+  return `lexical-groups/${groupId}/image.avif`;
+}
+
+export function lexicalGroupAudioKey(groupId: string): string {
+  return `lexical-groups/${groupId}/audio.opus`;
+}
+
+export function lexicalGroupImageUrl(env: Env, groupId: string): string {
+  return `${env.ASSET_BASE_URL.replace(/\/$/u, '')}/${lexicalGroupImageKey(groupId)}`;
+}
+
+export function lexicalGroupAudioUrl(env: Env, groupId: string): string {
+  return `${env.ASSET_BASE_URL.replace(/\/$/u, '')}/${lexicalGroupAudioKey(groupId)}`;
+}
+
 async function deleteAsset(env: Env, url: string | null): Promise<void> {
   if (!url || !env.ASSETS) return;
   const baseUrl = env.ASSET_BASE_URL.replace(/\/$/u, '');
@@ -92,5 +108,15 @@ export async function deleteInstructionAudio(env: Env, url: string | null, instr
   const baseUrl = env.ASSET_BASE_URL.replace(/\/$/u, '');
   if (url?.startsWith(`${baseUrl}/`)) keys.add(url.slice(baseUrl.length + 1));
   if (instructionId && voiceId) keys.add(instructionAudioKey(instructionId, voiceId));
+  await Promise.all([...keys].map(key => env.ASSETS.delete(key)));
+}
+
+export async function deleteLexicalGroupAssets(env: Env, groupId: string, image: string | null, audio: string | null): Promise<void> {
+  if (!env.ASSETS) return;
+  const baseUrl = env.ASSET_BASE_URL.replace(/\/$/u, '');
+  const keys = new Set([lexicalGroupImageKey(groupId), lexicalGroupAudioKey(groupId)]);
+  for (const url of [image, audio]) {
+    if (url?.startsWith(`${baseUrl}/`)) keys.add(url.slice(baseUrl.length + 1));
+  }
   await Promise.all([...keys].map(key => env.ASSETS.delete(key)));
 }

@@ -26,6 +26,8 @@ import {
 import { errorResponse } from '../utils/response.ts';
 import { batchDeleteLexicals, createLexical, deleteLexical, duplicateLexical, getLexical, listLexicals, updateLexical } from '../features/lexicals/handlers.ts';
 import { confirmLexicalMedia, deleteLexicalMedia, presignLexicalMedia } from '../features/lexicals/media-handlers.ts';
+import { createLexicalGroup, deleteLexicalGroup, getLexicalGroup, listLexicalGroups, replaceGroupLexicals, updateLexicalGroup } from '../features/lexical-groups/handlers.ts';
+import { confirmLexicalGroupMedia, deleteLexicalGroupMedia, presignLexicalGroupMedia } from '../features/lexical-groups/media-handlers.ts';
 
 function methodNotAllowed(origin: string): Response {
   return errorResponse(405, 'BAD_REQUEST', 'Method not allowed', origin);
@@ -75,6 +77,29 @@ export async function routeAdminRequest(
   }
 
   // English Instruction Routes
+  if (path === '/lexical-groups') {
+    if (request.method === 'GET') return listLexicalGroups(request, env, origin);
+    if (request.method === 'POST') return createLexicalGroup(request, env, origin);
+    return methodNotAllowed(origin);
+  }
+  const lexicalGroupLexicalsMatch = path.match(/^\/lexical-groups\/([^/]+)\/lexicals$/);
+  if (lexicalGroupLexicalsMatch) return request.method === 'PUT' ? replaceGroupLexicals(request, env, origin, lexicalGroupLexicalsMatch[1]) : methodNotAllowed(origin);
+  const lexicalGroupMediaPresignMatch = path.match(/^\/lexical-groups\/([^/]+)\/(image|audio)\/presign$/);
+  if (lexicalGroupMediaPresignMatch) return request.method === 'POST' ? presignLexicalGroupMedia(request, env, origin, lexicalGroupMediaPresignMatch[1], lexicalGroupMediaPresignMatch[2] as 'image' | 'audio') : methodNotAllowed(origin);
+  const lexicalGroupMediaMatch = path.match(/^\/lexical-groups\/([^/]+)\/(image|audio)$/);
+  if (lexicalGroupMediaMatch) {
+    if (request.method === 'POST') return confirmLexicalGroupMedia(env, origin, lexicalGroupMediaMatch[1], lexicalGroupMediaMatch[2] as 'image' | 'audio');
+    if (request.method === 'DELETE') return deleteLexicalGroupMedia(env, origin, lexicalGroupMediaMatch[1], lexicalGroupMediaMatch[2] as 'image' | 'audio');
+    return methodNotAllowed(origin);
+  }
+  const lexicalGroupMatch = path.match(/^\/lexical-groups\/([^/]+)$/);
+  if (lexicalGroupMatch) {
+    if (request.method === 'GET') return getLexicalGroup(env, origin, lexicalGroupMatch[1]);
+    if (request.method === 'PUT') return updateLexicalGroup(request, env, origin, lexicalGroupMatch[1]);
+    if (request.method === 'DELETE') return deleteLexicalGroup(env, origin, lexicalGroupMatch[1]);
+    return methodNotAllowed(origin);
+  }
+
   if (path === '/lexicals/batch-delete') return request.method === 'POST' ? batchDeleteLexicals(request, env, origin) : methodNotAllowed(origin);
   if (path === '/lexicals') {
     if (request.method === 'GET') return listLexicals(request, env, origin);
