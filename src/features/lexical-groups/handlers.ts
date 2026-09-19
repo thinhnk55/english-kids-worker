@@ -5,14 +5,14 @@ import { generateUUIDv7 } from '../../utils/uuid.ts';
 
 type Json = Record<string, unknown>;
 interface GroupRow { id: string; topic_id: number; name: string; description: string | null; image: string | null; audio: string | null; translations: string }
-interface LexicalRow { id: string; text: string; translations: string }
+interface LexicalRow { id: string; text: string; tokens: string; pronunciation: string | null; translations: string; audio_url?: string | null; image_url?: string | null }
 interface GroupInput { topicId: number; name: string; description: string | null; translations: Json }
 
 function isResponse(value: unknown): value is Response { return value instanceof Response; }
 function object(value: unknown): Json | null { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Json : null; }
 function parseObject(value: string): Json { try { return object(JSON.parse(value)) ?? {}; } catch { return {}; } }
 function group(row: GroupRow) { return { ...row, translations: parseObject(row.translations) }; }
-function lexical(row: LexicalRow) { return { ...row, translations: parseObject(row.translations) }; }
+function lexical({ tokens, ...row }: LexicalRow) { return { ...row, tokens: JSON.parse(tokens), translations: parseObject(row.translations) }; }
 
 async function body(request: Request, origin: string): Promise<Json | Response> {
   try { return object(await request.json()) ?? errorResponse(400, 'VALIDATION_ERROR', 'Dữ liệu phải là JSON object', origin); } catch { return errorResponse(400, 'BAD_REQUEST', 'Định dạng JSON không hợp lệ', origin); }
@@ -43,8 +43,8 @@ async function find(env: Env, id: string): Promise<GroupRow | null> {
 }
 async function topicExists(env: Env, id: number): Promise<boolean> { return Boolean(await env.DB.prepare('SELECT id FROM english_kid_topic WHERE id = ?').bind(id).first()); }
 async function detail(env: Env, row: GroupRow) {
-  const lexicals = await env.DB.prepare(`SELECT lexicals.id, lexicals.text, lexicals.translations FROM lexical_group_lexicals JOIN lexicals ON lexicals.id = lexical_group_lexicals.lexical_id WHERE lexical_group_lexicals.lexical_group_id = ? ORDER BY lexicals.text COLLATE NOCASE`).bind(row.id).all<LexicalRow>();
-  return { ...group(row), lexicals: lexicals.results.map(lexical) };
+  const lexicals = await env.DB.prepare(`SELECT lexicals.id, lexicals.text, lexicals.tokens, lexicals.pronunciation, lexicals.translations, (SELECT url FROM lexicals_audio WHERE lexical_id = lexicals.id LIMIT 1) AS audio_url, (SELECT url FROM lexicals_image WHERE lexical_id = lexicals.id LIMIT 1) AS image_url FROM lexical_group_lexicals JOIN lexicals ON lexicals.id = lexical_group_lexicals.lexical_id WHERE lexical_group_lexicals.lexical_group_id = ? ORDER BY lexicals.text COLLATE NOCASE`).bind(row.id).all<LexicalRow>();
+  return { ...group(row), lexicals: lexicals.results.map(({ audio_url, image_url, ...item }) => ({ ...lexical(item), audio: audio_url ? [{ id: `${item.id}:audio`, url: audio_url }] : [], image: image_url ? [{ id: `${item.id}:image`, url: image_url }] : [] })) };
 }
 
 export async function listLexicalGroups(request: Request, env: Env, origin: string): Promise<Response> {
