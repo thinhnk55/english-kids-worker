@@ -4,7 +4,7 @@ import { errorResponse, successResponse } from '../../utils/response.ts';
 import { generateUUIDv7 } from '../../utils/uuid.ts';
 
 type Json = Record<string, unknown>;
-interface GroupRow { id: string; topic_id: number; name: string; description: string | null; image: string | null; audio: string | null; translations: string; lexical_count?: number }
+interface GroupRow { id: string; topic_id: number; name: string; description: string | null; image: string | null; audio: string | null; translations: string }
 interface LexicalRow { id: string; text: string; translations: string }
 interface GroupInput { topicId: number; name: string; description: string | null; translations: Json }
 
@@ -52,7 +52,7 @@ export async function listLexicalGroups(request: Request, env: Env, origin: stri
     const url = new URL(request.url); const rawTopicId = url.searchParams.get('topic_id'); const selectedTopicId = topicId(rawTopicId === null ? undefined : Number(rawTopicId), origin); if (isResponse(selectedTopicId)) return selectedTopicId;
     const { page, size, offset } = parsePagination(url); const q = url.searchParams.get('q')?.trim() ?? ''; const where = q ? 'WHERE lexical_groups.topic_id = ? AND lexical_groups.name LIKE ?' : 'WHERE lexical_groups.topic_id = ?'; const binds = q ? [selectedTopicId, `%${q}%`] : [selectedTopicId];
     const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM lexical_groups ${where}`).bind(...binds).first<{ total: number }>();
-    const rows = await env.DB.prepare(`SELECT lexical_groups.id, lexical_groups.topic_id, lexical_groups.name, lexical_groups.description, lexical_groups.image, lexical_groups.audio, lexical_groups.translations, (SELECT COUNT(*) FROM lexical_group_lexicals WHERE lexical_group_id = lexical_groups.id) AS lexical_count FROM lexical_groups ${where} ORDER BY lexical_groups.id DESC LIMIT ? OFFSET ?`).bind(...binds, size, offset).all<GroupRow>();
+    const rows = await env.DB.prepare(`SELECT lexical_groups.id, lexical_groups.topic_id, lexical_groups.name, lexical_groups.description, lexical_groups.image, lexical_groups.audio, lexical_groups.translations FROM lexical_groups ${where} ORDER BY lexical_groups.id DESC LIMIT ? OFFSET ?`).bind(...binds, size, offset).all<GroupRow>();
     return successResponse(200, 'SUCCESS', rows.results.map(group), origin, { page, size, total: count?.total ?? 0 });
   } catch (error) { return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin); }
 }
