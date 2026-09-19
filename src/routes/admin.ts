@@ -25,6 +25,7 @@ import {
 } from '../features/topics/media-handlers.ts';
 import { errorResponse } from '../utils/response.ts';
 import { batchDeleteLexicals, createLexical, deleteLexical, duplicateLexical, getLexical, listLexicals, updateLexical } from '../features/lexicals/handlers.ts';
+import { confirmLexicalMedia, deleteLexicalMedia, presignLexicalMedia } from '../features/lexicals/media-handlers.ts';
 
 function methodNotAllowed(origin: string): Response {
   return errorResponse(405, 'BAD_REQUEST', 'Method not allowed', origin);
@@ -82,6 +83,12 @@ export async function routeAdminRequest(
   }
   const lexicalDuplicateMatch = path.match(/^\/lexicals\/([^/]+)\/duplicate$/);
   if (lexicalDuplicateMatch) return request.method === 'POST' ? duplicateLexical(env, origin, lexicalDuplicateMatch[1]) : methodNotAllowed(origin);
+  const lexicalMediaPresignMatch = path.match(/^\/lexicals\/([^/]+)\/media\/presign$/);
+  if (lexicalMediaPresignMatch) return request.method === 'POST' ? presignLexicalMedia(request, env, origin, lexicalMediaPresignMatch[1]) : methodNotAllowed(origin);
+  const lexicalMediaMatch = path.match(/^\/lexicals\/([^/]+)\/media$/);
+  if (lexicalMediaMatch) return request.method === 'POST' ? confirmLexicalMedia(request, env, origin, lexicalMediaMatch[1]) : methodNotAllowed(origin);
+  const lexicalMediaDeleteMatch = path.match(/^\/lexicals\/([^/]+)\/media\/(audio|image|video)\/([^/]+)$/);
+  if (lexicalMediaDeleteMatch) return request.method === 'DELETE' ? deleteLexicalMedia(env, origin, lexicalMediaDeleteMatch[1], lexicalMediaDeleteMatch[2], lexicalMediaDeleteMatch[3]) : methodNotAllowed(origin);
   const lexicalMatch = path.match(/^\/lexicals\/([^/]+)$/);
   if (lexicalMatch) {
     if (request.method === 'GET') return getLexical(env, origin, lexicalMatch[1]);

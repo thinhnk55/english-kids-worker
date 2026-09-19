@@ -1,0 +1,24 @@
+import { createPresignedPutUrlForObject } from '../../utils/r2-presign.ts';
+import { errorResponse, successResponse } from '../../utils/response.ts';
+import { generateUUIDv7 } from '../../utils/uuid.ts';
+
+const purposes = new Set(['illustration', 'shadow']);
+type Kind = 'audio' | 'image' | 'video';
+const formats: Record<Kind, { contentType: string; extension: string }> = {
+  audio: { contentType: 'audio/ogg', extension: 'opus' }, image: { contentType: 'image/avif', extension: 'avif' }, video: { contentType: 'video/mp4', extension: 'mp4' },
+};
+function kind(value: unknown): Kind | null { return value === 'audio' || value === 'image' || value === 'video' ? value : null }
+function table(value: Kind) { return `lexicals_${value}` }
+async function exists(env: Env, id: string) { return env.DB.prepare('SELECT id FROM lexicals WHERE id = ?').bind(id).first() }
+function publicUrl(env: Env, lexicalId: string, kind: Kind, id: string) { return `${env.ASSET_BASE_URL.replace(/\/$/u, '')}/lexicals/${lexicalId}/${kind}/${id}.${formats[kind].extension}` }
+export async function presignLexicalMedia(request: Request, env: Env, origin: string, lexicalId: string): Promise<Response> {
+  if (!await exists(env, lexicalId)) return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy lexical', origin);
+  try { const body = await request.json() as Record<string, unknown>; const mediaKind = kind(body.kind); if (!mediaKind || body.content_type !== formats[mediaKind].contentType) return errorResponse(400, 'VALIDATION_ERROR', 'Loại media hoặc content_type không hợp lệ', origin); if (mediaKind !== 'audio' && (!purposes.has(String(body.purpose)))) return errorResponse(400, 'VALIDATION_ERROR', 'purpose không hợp lệ', origin); if (mediaKind === 'audio' && (typeof body.voice_id !== 'string' || !body.voice_id.trim())) return errorResponse(400, 'VALIDATION_ERROR', 'voice_id không hợp lệ', origin); const id = generateUUIDv7(); const key = `lexicals/${lexicalId}/${mediaKind}/${id}.${formats[mediaKind].extension}`; const signed = await createPresignedPutUrlForObject(key, formats[mediaKind].contentType, env); return signed ? successResponse(200, 'SUCCESS', { id, kind: mediaKind, url: publicUrl(env, lexicalId, mediaKind, id), key, content_type: formats[mediaKind].contentType, upload_url: signed.uploadUrl, expires_in: signed.expiresIn }, origin) : errorResponse(500, 'INTERNAL_ERROR', 'R2 presigned URL chưa được cấu hình', origin) } catch { return errorResponse(400, 'BAD_REQUEST', 'Định dạng JSON không hợp lệ', origin) }
+}
+export async function confirmLexicalMedia(request: Request, env: Env, origin: string, lexicalId: string): Promise<Response> {
+  if (!await exists(env, lexicalId)) return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy lexical', origin);
+  try { const body = await request.json() as Record<string, unknown>; const mediaKind = kind(body.kind); if (!mediaKind || typeof body.id !== 'string' || typeof body.url !== 'string' || body.url !== publicUrl(env, lexicalId, mediaKind, body.id)) return errorResponse(400, 'VALIDATION_ERROR', 'Media không hợp lệ', origin); const key = `lexicals/${lexicalId}/${mediaKind}/${body.id}.${formats[mediaKind].extension}`; if (!await env.ASSETS.head(key)) return errorResponse(400, 'VALIDATION_ERROR', 'Chưa tìm thấy file đã tải lên', origin); if (mediaKind === 'audio') { if (typeof body.voice_id !== 'string' || !body.voice_id.trim()) return errorResponse(400, 'VALIDATION_ERROR', 'voice_id không hợp lệ', origin); await env.DB.prepare('INSERT INTO lexicals_audio (id, lexical_id, url, voice_id) VALUES (?, ?, ?, ?)').bind(body.id, lexicalId, body.url, body.voice_id.trim()).run() } else { if (!purposes.has(String(body.purpose))) return errorResponse(400, 'VALIDATION_ERROR', 'purpose không hợp lệ', origin); await env.DB.prepare(`INSERT INTO ${table(mediaKind)} (id, lexical_id, url, purpose) VALUES (?, ?, ?, ?)`).bind(body.id, lexicalId, body.url, body.purpose).run() } return successResponse(201, 'CREATED', { id: body.id, url: body.url }, origin) } catch (error) { return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin) }
+}
+export async function deleteLexicalMedia(env: Env, origin: string, lexicalId: string, rawKind: string, mediaId: string): Promise<Response> {
+  const mediaKind = kind(rawKind); if (!mediaKind) return errorResponse(400, 'VALIDATION_ERROR', 'Loại media không hợp lệ', origin); const row = await env.DB.prepare(`SELECT url FROM ${table(mediaKind)} WHERE id = ? AND lexical_id = ?`).bind(mediaId, lexicalId).first<{ url: string }>(); if (!row) return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy media', origin); const base = env.ASSET_BASE_URL.replace(/\/$/u, ''); if (row.url.startsWith(`${base}/`)) await env.ASSETS.delete(row.url.slice(base.length + 1)); await env.DB.prepare(`DELETE FROM ${table(mediaKind)} WHERE id = ?`).bind(mediaId).run(); return successResponse(200, 'DELETED', undefined, origin)
+}
