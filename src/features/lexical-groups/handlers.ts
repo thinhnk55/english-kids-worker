@@ -49,8 +49,11 @@ async function detail(env: Env, row: GroupRow) {
 
 export async function listLexicalGroups(request: Request, env: Env, origin: string): Promise<Response> {
   try {
-    const url = new URL(request.url); const rawTopicId = url.searchParams.get('topic_id'); const selectedTopicId = topicId(rawTopicId === null ? undefined : Number(rawTopicId), origin); if (isResponse(selectedTopicId)) return selectedTopicId;
-    const { page, size, offset } = parsePagination(url); const q = url.searchParams.get('q')?.trim() ?? ''; const where = q ? 'WHERE lexical_groups.topic_id = ? AND lexical_groups.name LIKE ?' : 'WHERE lexical_groups.topic_id = ?'; const binds = q ? [selectedTopicId, `%${q}%`] : [selectedTopicId];
+    const url = new URL(request.url); const rawTopicId = url.searchParams.get('topic_id'); const selectedTopicId = rawTopicId === null ? null : topicId(Number(rawTopicId), origin); if (isResponse(selectedTopicId)) return selectedTopicId;
+    const { page, size, offset } = parsePagination(url); const q = url.searchParams.get('q')?.trim() ?? ''; const conditions: string[] = []; const binds: (number | string)[] = [];
+    if (selectedTopicId !== null) { conditions.push('lexical_groups.topic_id = ?'); binds.push(selectedTopicId); }
+    if (q) { conditions.push('lexical_groups.name LIKE ?'); binds.push(`%${q}%`); }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM lexical_groups ${where}`).bind(...binds).first<{ total: number }>();
     const rows = await env.DB.prepare(`SELECT lexical_groups.id, lexical_groups.topic_id, lexical_groups.name, lexical_groups.description, lexical_groups.image, lexical_groups.audio, lexical_groups.translations FROM lexical_groups ${where} ORDER BY lexical_groups.id DESC LIMIT ? OFFSET ?`).bind(...binds, size, offset).all<GroupRow>();
     return successResponse(200, 'SUCCESS', rows.results.map(group), origin, { page, size, total: count?.total ?? 0 });
