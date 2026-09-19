@@ -28,8 +28,7 @@ function tokens(value: unknown, origin: string): Token[] | Response {
   }
   return output;
 }
-async function input(request: Request, origin: string): Promise<Input | Response> {
-  const value = await body(request, origin); if (response(value)) return value;
+function inputValue(value: Json, origin: string): Input | Response {
   if (typeof value.text !== 'string' || !value.text.trim()) return errorResponse(400, 'VALIDATION_ERROR', 'text không được để trống', origin);
   const tokenList = tokens(value.tokens, origin); if (response(tokenList)) return tokenList;
   const translations = value.translations === undefined ? {} : object(value.translations);
@@ -37,6 +36,7 @@ async function input(request: Request, origin: string): Promise<Input | Response
   if (value.pronunciation !== undefined && value.pronunciation !== null && typeof value.pronunciation !== 'string') return errorResponse(400, 'VALIDATION_ERROR', 'pronunciation phải là chuỗi hoặc null', origin);
   return { text: value.text.trim(), tokens: tokenList, pronunciation: typeof value.pronunciation === 'string' ? value.pronunciation.trim() || null : null, translations };
 }
+async function input(request: Request, origin: string): Promise<Input | Response> { const value = await body(request, origin); return response(value) ? value : inputValue(value, origin); }
 async function find(env: Env, id: string): Promise<LexicalRow | null> { return env.DB.prepare('SELECT id, text, tokens, pronunciation, translations FROM lexicals WHERE id = ?').bind(id).first<LexicalRow>() }
 async function detail(env: Env, row: LexicalRow) {
   const [audios, images, videos] = await Promise.all([env.DB.prepare(`SELECT id, url, voice_id FROM ${audio} WHERE lexical_id = ?`).bind(row.id).all(), env.DB.prepare(`SELECT id, url, purpose FROM ${image} WHERE lexical_id = ?`).bind(row.id).all(), env.DB.prepare(`SELECT id, url, purpose FROM ${video} WHERE lexical_id = ?`).bind(row.id).all()]);
@@ -55,6 +55,17 @@ export async function checkLexicalDuplicates(request: Request, env: Env, origin:
     const rows = await env.DB.prepare(`SELECT id, text, tokens, pronunciation, translations FROM lexicals WHERE lower(text) IN (${texts.map(() => 'lower(?)').join(', ')})`).bind(...texts).all<LexicalRow>();
     return successResponse(200, 'SUCCESS', rows.results.map(lexical), origin);
   } catch (error) { return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin); }
+}
+export async function batchCreateLexicals(request: Request, env: Env, origin: string): Promise<Response> {
+  const value = await body(request, origin); if (response(value)) return value;
+  if (!Array.isArray(value.items) || !value.items.length || value.items.length > 100) return errorResponse(400, 'VALIDATION_ERROR', 'items phải có từ 1 đến 100 lexical', origin);
+  const items: Input[] = []
+  for (const raw of value.items) { const parsedInput = object(raw); if (!parsedInput) return errorResponse(400, 'VALIDATION_ERROR', 'Mỗi lexical phải là JSON object', origin); const item = inputValue(parsedInput, origin); if (response(item)) return item; items.push(item); }
+  try {
+    const created = items.map((item) => ({ id: generateUUIDv7(), ...item }))
+    await env.DB.batch(created.map((item) => env.DB.prepare('INSERT INTO lexicals (id, text, tokens, pronunciation, translations) VALUES (?, ?, ?, ?, ?)').bind(item.id, item.text, JSON.stringify(item.tokens), item.pronunciation, JSON.stringify(item.translations))))
+    return successResponse(201, 'CREATED', created.map((item) => ({ ...item, audio: [], image: [], video: [] })), origin)
+  } catch (error) { return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin) }
 }
 export async function getLexical(env: Env, origin: string, id: string): Promise<Response> { try { const row = await find(env, id); return row ? successResponse(200, 'SUCCESS', await detail(env, row), origin) : errorResponse(404, 'NOT_FOUND', 'Không tìm thấy lexical', origin) } catch (error) { return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin) } }
 export async function createLexical(request: Request, env: Env, origin: string): Promise<Response> { const value = await input(request, origin); if (response(value)) return value; try { const id = generateUUIDv7(); await env.DB.prepare('INSERT INTO lexicals (id, text, tokens, pronunciation, translations) VALUES (?, ?, ?, ?, ?)').bind(id, value.text, JSON.stringify(value.tokens), value.pronunciation, JSON.stringify(value.translations)).run(); return getLexical(env, origin, id) } catch (error) { return errorResponse(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : undefined, origin) } }

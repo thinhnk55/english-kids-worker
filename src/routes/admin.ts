@@ -24,7 +24,7 @@ import {
   deleteTopicImageAsset,
 } from '../features/topics/media-handlers.ts';
 import { errorResponse } from '../utils/response.ts';
-import { batchDeleteLexicals, checkLexicalDuplicates, createLexical, deleteLexical, duplicateLexical, getLexical, listLexicals, updateLexical } from '../features/lexicals/handlers.ts';
+import { batchCreateLexicals, batchDeleteLexicals, checkLexicalDuplicates, createLexical, deleteLexical, duplicateLexical, getLexical, listLexicals, updateLexical } from '../features/lexicals/handlers.ts';
 import { confirmLexicalMedia, deleteLexicalMedia, presignLexicalMedia } from '../features/lexicals/media-handlers.ts';
 import { createLexicalGroup, deleteLexicalGroup, getLexicalGroup, listLexicalGroups, replaceGroupLexicals, updateLexicalGroup } from '../features/lexical-groups/handlers.ts';
 import { confirmLexicalGroupMedia, deleteLexicalGroupMedia, presignLexicalGroupMedia } from '../features/lexical-groups/media-handlers.ts';
@@ -101,6 +101,7 @@ export async function routeAdminRequest(
   }
 
   if (path === '/lexicals/batch-delete') return request.method === 'POST' ? batchDeleteLexicals(request, env, origin) : methodNotAllowed(origin);
+  if (path === '/lexicals/batch') return request.method === 'POST' ? batchCreateLexicals(request, env, origin) : methodNotAllowed(origin);
   if (path === '/lexicals/check-duplicates') return request.method === 'POST' ? checkLexicalDuplicates(request, env, origin) : methodNotAllowed(origin);
   if (path === '/lexicals') {
     if (request.method === 'GET') return listLexicals(request, env, origin);
