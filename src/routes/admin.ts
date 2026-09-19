@@ -24,6 +24,7 @@ import {
   deleteTopicImageAsset,
 } from '../features/topics/media-handlers.ts';
 import { errorResponse } from '../utils/response.ts';
+import { batchDeleteLexicals, createLexical, deleteLexical, duplicateLexical, getLexical, listLexicals, updateLexical } from '../features/lexicals/handlers.ts';
 
 function methodNotAllowed(origin: string): Response {
   return errorResponse(405, 'BAD_REQUEST', 'Method not allowed', origin);
@@ -73,6 +74,22 @@ export async function routeAdminRequest(
   }
 
   // English Instruction Routes
+  if (path === '/lexicals/batch-delete') return request.method === 'POST' ? batchDeleteLexicals(request, env, origin) : methodNotAllowed(origin);
+  if (path === '/lexicals') {
+    if (request.method === 'GET') return listLexicals(request, env, origin);
+    if (request.method === 'POST') return createLexical(request, env, origin);
+    return methodNotAllowed(origin);
+  }
+  const lexicalDuplicateMatch = path.match(/^\/lexicals\/([^/]+)\/duplicate$/);
+  if (lexicalDuplicateMatch) return request.method === 'POST' ? duplicateLexical(env, origin, lexicalDuplicateMatch[1]) : methodNotAllowed(origin);
+  const lexicalMatch = path.match(/^\/lexicals\/([^/]+)$/);
+  if (lexicalMatch) {
+    if (request.method === 'GET') return getLexical(env, origin, lexicalMatch[1]);
+    if (request.method === 'PUT') return updateLexical(request, env, origin, lexicalMatch[1]);
+    if (request.method === 'DELETE') return deleteLexical(env, origin, lexicalMatch[1]);
+    return methodNotAllowed(origin);
+  }
+
   if (path === '/english-instructions/batch-delete') {
     return request.method === 'POST' ? handleBatchDeleteEnglishInstructions(request, env, origin) : methodNotAllowed(origin);
   }

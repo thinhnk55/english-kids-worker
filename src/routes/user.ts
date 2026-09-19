@@ -7,6 +7,7 @@ import {
   handleListEnglishInstructions,
 } from '../features/english-instructions/handlers.ts';
 import { errorResponse } from '../utils/response.ts';
+import { getLexical, listLexicals } from '../features/lexicals/handlers.ts';
 
 export async function routeUserRequest(
   request: Request,
@@ -25,6 +26,10 @@ export async function routeUserRequest(
   }
 
   // English Instruction Routes
+  if (path === '/lexicals' && request.method === 'GET') return listLexicals(request, env, origin);
+  const lexicalMatch = path.match(/^\/lexicals\/([^/]+)$/);
+  if (lexicalMatch && request.method === 'GET') return getLexical(env, origin, lexicalMatch[1]);
+
   if (path === '/english-instructions') {
     if (request.method === 'GET') return handleListEnglishInstructions(request, env, origin);
   }
