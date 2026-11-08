@@ -1,3 +1,4 @@
+import { handleGetCatalog } from './features/catalog/handlers.ts';
 import { routeAdminRequest } from './routes/admin.ts';
 import { routeUserRequest } from './routes/user.ts';
 import { requireAdmin, requireUser } from './utils/auth.ts';
@@ -19,6 +20,7 @@ export default {
         name: 'english-kids-worker',
         version: '2.0.0',
         api: {
+          public: '/v1/catalogs',
           admin: '/v1/admin',
           user: '/v1/my',
         },
@@ -30,12 +32,21 @@ export default {
       });
     }
 
+    // Public published catalogs (no auth required for lightning speed)
+    if (pathname.startsWith('/v1/catalogs/')) {
+      const key = decodeURIComponent(pathname.slice('/v1/catalogs/'.length));
+      if (request.method !== 'GET') return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+      return handleGetCatalog(key, env, origin);
+    }
+
+    // Admin routes
     if (pathname === '/v1/admin' || pathname.startsWith('/v1/admin/')) {
       const auth = await requireAdmin(request, env, origin);
       if (!auth.ok) return auth.response;
       return routeAdminRequest(request, env, origin, pathname);
     }
 
+    // User routes
     if (pathname === '/v1/my' || pathname.startsWith('/v1/my/') || pathname === '/v1' || pathname.startsWith('/v1/')) {
       const auth = await requireUser(request, env, origin);
       if (!auth.ok) return auth.response;
