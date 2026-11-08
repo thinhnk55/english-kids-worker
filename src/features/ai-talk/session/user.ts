@@ -1,4 +1,6 @@
 import { evaluateAndReplyAiTalk } from '../../../services/llm.ts';
+import { transcribeAudio } from '../../../services/stt.ts';
+import { synthesizeSpeech } from '../../../services/tts.ts';
 import type { AiTalkMission, AiTalkScenario, AiTalkSession, ChatMessage } from '../../../types/ai-talk.ts';
 import { safeJsonParse } from '../../../utils/json.ts';
 import { errorResponse, successResponse } from '../../../utils/response.ts';
@@ -113,6 +115,7 @@ export async function handleListProfileSessions(
   return successResponse(200, 'SUCCESS', list, origin);
 }
 
+// Xử lý gửi tin nhắn dạng văn bản (Text -> LLM Reply)
 export async function handleSessionMessage(
   request: Request,
   sessionId: number,
@@ -128,8 +131,86 @@ export async function handleSessionMessage(
     return errorResponse(400, 'VALIDATION_ERROR', 'Tin nhắn không được để trống', origin);
   }
 
-  const userText = body.message.trim();
+  return await executeTurn(sessionId, userId, body.message.trim(), env, origin);
+}
 
+// Xử lý gửi tin nhắn dạng giọng nói (Audio Voice -> STT -> LLM Reply)
+export async function handleSessionVoiceMessage(
+  request: Request,
+  sessionId: number,
+  userId: number,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const sttRes = await transcribeAudio(request, env);
+  if (!sttRes.ok || !sttRes.text) {
+    return errorResponse(400, 'VALIDATION_ERROR', sttRes.error || 'Không nhận diện được giọng nói', origin);
+  }
+
+  return await executeTurn(sessionId, userId, sttRes.text, env, origin, sttRes.text);
+}
+
+// Chuyển đổi một tin nhắn của AI trong phiên thành audio (TTS)
+export async function handleGetMessageAudio(
+  sessionId: number,
+  messageIndex: number,
+  userId: number,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const session = await env.DB.prepare(
+    'SELECT * FROM ai_talk_sessions WHERE id = ? AND user_id = ?',
+  )
+    .bind(sessionId, userId)
+    .first<AiTalkSession>();
+
+  if (!session) {
+    return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy phiên trò chuyện', origin);
+  }
+
+  const messages: ChatMessage[] = typeof session.messages === 'string'
+    ? safeJsonParse(session.messages, [])
+    : session.messages;
+
+  const targetMsg = messages[messageIndex];
+  if (!targetMsg || !targetMsg.content) {
+    return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy tin nhắn cần phát âm', origin);
+  }
+
+  return await synthesizeSpeech(env, targetMsg.content, { voice: 'alloy', speed: 0.95 }, origin);
+}
+
+// Chuyển đổi văn bản tự do thành audio TTS (tiện lợi cho client phát thử)
+export async function handleSynthesizeGeneralText(
+  request: Request,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const body = await request.json().catch(() => null) as {
+    text?: string;
+    voice?: string;
+    speed?: number;
+  } | null;
+
+  if (!body || !body.text || typeof body.text !== 'string' || !body.text.trim()) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'Nội dung text không được để trống', origin);
+  }
+
+  return await synthesizeSpeech(env, body.text.trim(), {
+    voice: body.voice || 'alloy',
+    speed: body.speed || 1.0,
+  }, origin);
+}
+
+// Hàm dùng chung xử lý 1 lượt trò chuyện & tương tác LLM
+async function executeTurn(
+  sessionId: number,
+  userId: number,
+  userText: string,
+  env: Env,
+  origin: string,
+  transcribedText?: string,
+): Promise<Response> {
   const session = await env.DB.prepare(
     'SELECT * FROM ai_talk_sessions WHERE id = ? AND user_id = ?',
   )
@@ -237,7 +318,12 @@ export async function handleSessionMessage(
     )
     .first<AiTalkSession>();
 
-  return successResponse(200, 'SUCCESS', formatSession(updated), origin);
+  const formatted = formatSession(updated);
+
+  return successResponse(200, 'SUCCESS', {
+    ...(transcribedText ? { transcription: transcribedText } : {}),
+    ...formatted,
+  }, origin);
 }
 
 export function formatSession(session: AiTalkSession | null | undefined) {

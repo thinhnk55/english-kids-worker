@@ -1,8 +1,11 @@
 import {
+  handleGetMessageAudio,
   handleGetSession,
   handleListProfileSessions,
   handleSessionMessage,
+  handleSessionVoiceMessage,
   handleStartSession,
+  handleSynthesizeGeneralText,
 } from '../features/ai-talk/session/user.ts';
 import {
   handleCreateProfile,
@@ -41,6 +44,12 @@ export async function routeUserRequest(
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
+  // --- TTS độc lập cho bé nghe phát âm bất kỳ câu nào ---
+  if (pathname === '/v1/my/ai-talk/tts') {
+    if (method === 'POST') return handleSynthesizeGeneralText(request, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
   // --- AI Talk Sessions ---
   if (pathname === '/v1/my/ai-talk/sessions') {
     if (method === 'GET') return handleListProfileSessions(request, userId, env, origin);
@@ -48,6 +57,24 @@ export async function routeUserRequest(
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
+  // Gửi giọng nói (STT -> LLM response)
+  const voiceMessageMatch = pathname.match(/^\/v1\/my\/ai-talk\/sessions\/(\d+)\/messages\/voice$/);
+  if (voiceMessageMatch) {
+    const sessionId = Number(voiceMessageMatch[1]);
+    if (method === 'POST') return handleSessionVoiceMessage(request, sessionId, userId, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  // Lấy audio phát âm (TTS) cho 1 tin nhắn cụ thể của AI trong phiên
+  const audioMessageMatch = pathname.match(/^\/v1\/my\/ai-talk\/sessions\/(\d+)\/messages\/(\d+)\/audio$/);
+  if (audioMessageMatch) {
+    const sessionId = Number(audioMessageMatch[1]);
+    const messageIndex = Number(audioMessageMatch[2]);
+    if (method === 'GET') return handleGetMessageAudio(sessionId, messageIndex, userId, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  // Gửi tin nhắn dạng văn bản (Text -> LLM response)
   const sessionMessagesMatch = pathname.match(/^\/v1\/my\/ai-talk\/sessions\/(\d+)\/messages$/);
   if (sessionMessagesMatch) {
     const sessionId = Number(sessionMessagesMatch[1]);
@@ -55,6 +82,7 @@ export async function routeUserRequest(
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
+  // Lấy chi tiết phiên
   const sessionMatch = pathname.match(/^\/v1\/my\/ai-talk\/sessions\/(\d+)$/);
   if (sessionMatch) {
     const sessionId = Number(sessionMatch[1]);
