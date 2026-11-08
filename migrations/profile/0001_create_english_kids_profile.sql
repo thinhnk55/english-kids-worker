@@ -1,6 +1,6 @@
--- Bảng hồ sơ người học (Profiles)
+-- Bảng hồ sơ người học môn Tiếng Anh trẻ em (English Kids Profile)
 -- Một tài khoản phụ huynh (user_id) có thể tạo nhiều hồ sơ cho các bé
-CREATE TABLE profiles (
+CREATE TABLE english_kids_profile (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,                                 -- ID tài khoản người dùng từ JWT
   name TEXT NOT NULL,                                       -- Tên của bé (vd: 'Bé Bi', 'Tony')
@@ -12,4 +12,4 @@ CREATE TABLE profiles (
   updated_at INTEGER NOT NULL                               -- Unix timestamp
 );
 
-CREATE INDEX idx_profiles_user ON profiles(user_id, position ASC);
+CREATE INDEX idx_english_kids_profile_user ON english_kids_profile(user_id, position ASC);
