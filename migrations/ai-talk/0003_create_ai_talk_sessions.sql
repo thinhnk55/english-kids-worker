@@ -8,6 +8,7 @@ CREATE TABLE ai_talk_sessions (
   status TEXT NOT NULL DEFAULT 'in_progress',                  -- 'in_progress' | 'completed' | 'failed' | 'abandoned'
   turns_count INTEGER NOT NULL DEFAULT 0 CHECK (turns_count >= 0), -- Số lượt người học đã nói
   max_turns INTEGER NOT NULL DEFAULT 10 CHECK (max_turns > 0), -- Giới hạn số lượt của phiên
+  score INTEGER,                                               -- Điểm số đánh giá phiên rèn luyện (vd: 0 - 100)
   messages TEXT NOT NULL DEFAULT '[]',                         -- JSON array toàn bộ tin nhắn qua lại giữa bé và AI
   feedback TEXT,                                               -- Đánh giá, khen ngợi và gợi ý cải thiện ngôn ngữ sau khi kết thúc
   created_at INTEGER NOT NULL,                                 -- Unix timestamp bắt đầu phiên
