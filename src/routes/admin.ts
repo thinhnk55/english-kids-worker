@@ -3,7 +3,7 @@ import {
   handleDeleteAdminCategory,
   handleListAdminCategories,
   handleUpdateAdminCategory,
-} from '../features/ai-talk/category/handlers.ts';
+} from '../features/ai-talk/category/admin.ts';
 import {
   handleCreateAdminScenario,
   handleDeleteAdminScenario,
@@ -11,7 +11,12 @@ import {
   handleListAdminScenarios,
   handlePublishAiTalkCatalog,
   handleUpdateAdminScenario,
-} from '../features/ai-talk/scenario/handlers.ts';
+} from '../features/ai-talk/scenario/admin.ts';
+import {
+  handleDeleteAdminSession,
+  handleGetAdminSession,
+  handleListAdminSessions,
+} from '../features/ai-talk/session/admin.ts';
 import { errorResponse } from '../utils/response.ts';
 
 export async function routeAdminRequest(
@@ -56,6 +61,20 @@ export async function routeAdminRequest(
     if (method === 'GET') return handleGetAdminScenario(id, env, origin);
     if (method === 'PUT') return handleUpdateAdminScenario(request, id, env, origin);
     if (method === 'DELETE') return handleDeleteAdminScenario(id, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  // --- Sessions (Admin view / manage) ---
+  if (pathname === '/v1/admin/ai-talk/sessions') {
+    if (method === 'GET') return handleListAdminSessions(request, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  const sessionMatch = pathname.match(/^\/v1\/admin\/ai-talk\/sessions\/([^/]+)$/);
+  if (sessionMatch) {
+    const id = decodeURIComponent(sessionMatch[1]);
+    if (method === 'GET') return handleGetAdminSession(id, env, origin);
+    if (method === 'DELETE') return handleDeleteAdminSession(id, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 

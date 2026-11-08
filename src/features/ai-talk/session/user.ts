@@ -133,7 +133,6 @@ export async function handleSessionMessage(
 
   const userText = body.message.trim();
 
-  // Load session
   const session = await env.DB.prepare(
     'SELECT * FROM ai_talk_sessions WHERE id = ? AND user_id = ?',
   )
@@ -157,7 +156,6 @@ export async function handleSessionMessage(
     return errorResponse(400, 'BAD_REQUEST', 'Đã đạt số lượt tối đa của bài luyện', origin);
   }
 
-  // Load scenario
   const scenario = await env.DB.prepare(
     'SELECT * FROM ai_talk_scenarios WHERE id = ?',
   )
@@ -180,7 +178,6 @@ export async function handleSessionMessage(
     ? safeJsonParse(scenario.missions, [])
     : scenario.missions;
 
-  // Add child's message
   const userMsg: ChatMessage = {
     role: 'user',
     content: userText,
@@ -188,7 +185,6 @@ export async function handleSessionMessage(
   };
   const updatedMessages = [...existingMessages, userMsg];
 
-  // Call LLM
   const turnResult = await evaluateAndReplyAiTalk(env, {
     situation: scenario.situation,
     aiRole: scenario.ai_role,
@@ -201,7 +197,6 @@ export async function handleSessionMessage(
     maxTurns: session.max_turns,
   });
 
-  // Add AI reply message
   const assistantMsg: ChatMessage = {
     role: 'assistant',
     content: turnResult.reply,
@@ -248,7 +243,7 @@ export async function handleSessionMessage(
   return successResponse(200, 'SUCCESS', formatSession(updated), origin);
 }
 
-function formatSession(session: AiTalkSession | null | undefined) {
+export function formatSession(session: AiTalkSession | null | undefined) {
   if (!session) return null;
   return {
     ...session,
