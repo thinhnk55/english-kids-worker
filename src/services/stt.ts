@@ -9,19 +9,10 @@ export async function transcribeAudio(
   env: Env,
 ): Promise<TranscribeResult> {
   const internalKey = env.INTERNAL_API_KEY || '751791ddb95fcb30db0330b2ea7c9bc9f15c4eee3f5d8ab968449988b4ef0d7c';
-
-  const caller = env.STT_SERVICE
-    ? env.STT_SERVICE.fetch.bind(env.STT_SERVICE)
-    : fetch;
-
-  const targetUrl = env.STT_SERVICE
-    ? 'https://stt-worker/v1/internal/audio/transcriptions'
-    : `${env.STT_BASE_URL || 'https://stt.hocnhe.com'}/v1/internal/audio/transcriptions`;
-
   const contentType = request.headers.get('content-type') || '';
 
   try {
-    const upstreamRes = await caller(targetUrl, {
+    const upstreamRes = await env.STT_SERVICE.fetch('https://stt-worker/v1/internal/audio/transcriptions', {
       method: 'POST',
       headers: {
         'content-type': contentType,

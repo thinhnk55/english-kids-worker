@@ -15,16 +15,8 @@ export async function synthesizeSpeech(
 ): Promise<Response> {
   const internalKey = env.INTERNAL_API_KEY || '751791ddb95fcb30db0330b2ea7c9bc9f15c4eee3f5d8ab968449988b4ef0d7c';
 
-  const caller = env.TTS_SERVICE
-    ? env.TTS_SERVICE.fetch.bind(env.TTS_SERVICE)
-    : fetch;
-
-  const targetUrl = env.TTS_SERVICE
-    ? 'https://tts-worker/v1/internal/audio/speech'
-    : `${env.TTS_BASE_URL || 'https://tts.hocnhe.com'}/v1/internal/audio/speech`;
-
   try {
-    const response = await caller(targetUrl, {
+    const response = await env.TTS_SERVICE.fetch('https://tts-worker/v1/internal/audio/speech', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

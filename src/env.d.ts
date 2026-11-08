@@ -7,13 +7,10 @@ interface __BaseEnv_Env {
 	R2_ACCOUNT_ID: string;
 	R2_ACCESS_KEY_ID: string;
 	R2_SECRET_ACCESS_KEY: string;
-	LLM_BASE_URL?: string;
-	TTS_BASE_URL?: string;
-	STT_BASE_URL?: string;
 	INTERNAL_API_KEY?: string;
-	LLM_SERVICE?: Fetcher;
-	TTS_SERVICE?: Fetcher;
-	STT_SERVICE?: Fetcher;
+	LLM_SERVICE: Fetcher;
+	TTS_SERVICE: Fetcher;
+	STT_SERVICE: Fetcher;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
