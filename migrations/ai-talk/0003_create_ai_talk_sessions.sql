@@ -15,7 +15,5 @@ CREATE TABLE ai_talk_sessions (
   updated_at INTEGER NOT NULL                                  -- Unix timestamp tương tác gần nhất
 );
 
--- Index tối ưu cho truy vấn phổ biến nhất: lấy lịch sử phiên của 1 bé trong 1 tình huống cụ thể
+-- Index tối ưu cho truy vấn lọc lịch sử theo profile hoặc profile + tình huống
 CREATE INDEX idx_ai_talk_sessions_profile_scenario ON ai_talk_sessions(profile_id, scenario_id, created_at DESC);
-CREATE INDEX idx_ai_talk_sessions_user ON ai_talk_sessions(user_id, created_at DESC);
-CREATE INDEX idx_ai_talk_sessions_status ON ai_talk_sessions(status, created_at DESC);
