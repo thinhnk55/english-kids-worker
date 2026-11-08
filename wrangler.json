@@ -31,7 +31,8 @@
 		{
 			"binding": "DB",
 			"database_name": "english-kids-db",
-			"database_id": "42e421aa-1efe-4323-8217-dc0106bb16ae"
+			"database_id": "42e421aa-1efe-4323-8217-dc0106bb16ae",
+			"migrations_dir": "migrations/ai-talk"
 		}
 	]
 }
