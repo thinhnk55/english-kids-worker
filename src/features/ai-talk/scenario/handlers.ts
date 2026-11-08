@@ -1,112 +1,58 @@
-import type { AiTalkCategory, AiTalkScenario } from '../../types/ai-talk.ts';
-import { errorResponse, successResponse } from '../../utils/response.ts';
+import type { AiTalkCategory, AiTalkScenario } from '../../../types/ai-talk.ts';
+import { safeJsonParse } from '../../../utils/json.ts';
+import { errorResponse, successResponse } from '../../../utils/response.ts';
 
-// Categories
-export async function handleListAdminCategories(env: Env, origin: string): Promise<Response> {
-  const result = await env.DB.prepare(
-    'SELECT * FROM ai_talk_categories ORDER BY position ASC, code ASC',
-  ).all<AiTalkCategory>();
-
-  return successResponse(200, 'SUCCESS', result.results ?? [], origin);
-}
-
-export async function handleCreateAdminCategory(request: Request, env: Env, origin: string): Promise<Response> {
-  const body = await request.json().catch(() => null) as {
-    code?: string;
-    parent_code?: string;
-    name?: string;
-    position?: number;
-  } | null;
-
-  if (!body || !body.code || !body.name) {
-    return errorResponse(400, 'VALIDATION_ERROR', 'Mã và tên danh mục là bắt buộc', origin);
-  }
-
-  const code = body.code.trim();
-  const name = body.name.trim();
-  const parentCode = body.parent_code?.trim() || null;
-  const position = typeof body.position === 'number' ? body.position : 0;
-
-  try {
-    const inserted = await env.DB.prepare(
-      `INSERT INTO ai_talk_categories (code, parent_code, name, position)
-       VALUES (?, ?, ?, ?)
-       RETURNING *`,
-    )
-      .bind(code, parentCode, name, position)
-      .first<AiTalkCategory>();
-
-    return successResponse(201, 'CREATED', inserted, origin);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.includes('UNIQUE') || message.includes('PRIMARY KEY')) {
-      return errorResponse(409, 'CONFLICT', 'Mã danh mục đã tồn tại', origin);
-    }
-    return errorResponse(500, 'INTERNAL_ERROR', message, origin);
-  }
-}
-
-export async function handleUpdateAdminCategory(
+// --- User: List Scenarios ---
+export async function handleListScenarios(
   request: Request,
-  code: string,
   env: Env,
   origin: string,
 ): Promise<Response> {
-  const body = await request.json().catch(() => null) as {
-    parent_code?: string;
-    name?: string;
-    position?: number;
-  } | null;
+  const url = new URL(request.url);
+  const category = url.searchParams.get('category');
 
-  if (!body) {
-    return errorResponse(400, 'BAD_REQUEST', undefined, origin);
+  let query = 'SELECT * FROM ai_talk_scenarios';
+  const params: unknown[] = [];
+
+  if (category) {
+    query += ' WHERE category = ?';
+    params.push(category);
   }
 
-  const existing = await env.DB.prepare(
-    'SELECT * FROM ai_talk_categories WHERE code = ?',
-  )
-    .bind(code)
-    .first<AiTalkCategory>();
+  query += ' ORDER BY id ASC';
 
-  if (!existing) {
-    return errorResponse(404, 'NOT_FOUND', undefined, origin);
-  }
+  const result = await env.DB.prepare(query).bind(...params).all<AiTalkScenario>();
+  const list = (result.results ?? []).map(s => ({
+    ...s,
+    missions: typeof s.missions === 'string' ? safeJsonParse(s.missions, []) : s.missions,
+  }));
 
-  const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : existing.name;
-  const parentCode = body.parent_code !== undefined ? (body.parent_code?.trim() || null) : existing.parent_code;
-  const position = typeof body.position === 'number' ? body.position : existing.position;
-
-  const updated = await env.DB.prepare(
-    `UPDATE ai_talk_categories
-     SET parent_code = ?, name = ?, position = ?
-     WHERE code = ?
-     RETURNING *`,
-  )
-    .bind(parentCode, name, position, code)
-    .first<AiTalkCategory>();
-
-  return successResponse(200, 'UPDATED', updated, origin);
+  return successResponse(200, 'SUCCESS', list, origin);
 }
 
-export async function handleDeleteAdminCategory(
-  code: string,
+// --- User: Get Scenario Detail ---
+export async function handleGetScenario(
+  id: string,
   env: Env,
   origin: string,
 ): Promise<Response> {
-  const result = await env.DB.prepare(
-    'DELETE FROM ai_talk_categories WHERE code = ?',
+  const scenario = await env.DB.prepare(
+    'SELECT * FROM ai_talk_scenarios WHERE id = ?',
   )
-    .bind(code)
-    .run();
+    .bind(id)
+    .first<AiTalkScenario>();
 
-  if (!result.meta.changes) {
+  if (!scenario) {
     return errorResponse(404, 'NOT_FOUND', undefined, origin);
   }
 
-  return successResponse(200, 'DELETED', undefined, origin);
+  return successResponse(200, 'SUCCESS', {
+    ...scenario,
+    missions: typeof scenario.missions === 'string' ? safeJsonParse(scenario.missions, []) : scenario.missions,
+  }, origin);
 }
 
-// Scenarios
+// --- Admin: List Scenarios ---
 export async function handleListAdminScenarios(env: Env, origin: string): Promise<Response> {
   const result = await env.DB.prepare(
     'SELECT * FROM ai_talk_scenarios ORDER BY id ASC',
@@ -120,6 +66,7 @@ export async function handleListAdminScenarios(env: Env, origin: string): Promis
   return successResponse(200, 'SUCCESS', list, origin);
 }
 
+// --- Admin: Get Scenario Detail ---
 export async function handleGetAdminScenario(id: string, env: Env, origin: string): Promise<Response> {
   const scenario = await env.DB.prepare(
     'SELECT * FROM ai_talk_scenarios WHERE id = ?',
@@ -137,6 +84,7 @@ export async function handleGetAdminScenario(id: string, env: Env, origin: strin
   }, origin);
 }
 
+// --- Admin: Create Scenario ---
 export async function handleCreateAdminScenario(
   request: Request,
   env: Env,
@@ -192,6 +140,7 @@ export async function handleCreateAdminScenario(
   }
 }
 
+// --- Admin: Update Scenario ---
 export async function handleUpdateAdminScenario(
   request: Request,
   id: string,
@@ -238,6 +187,7 @@ export async function handleUpdateAdminScenario(
   }, origin);
 }
 
+// --- Admin: Delete Scenario ---
 export async function handleDeleteAdminScenario(
   id: string,
   env: Env,
@@ -256,7 +206,7 @@ export async function handleDeleteAdminScenario(
   return successResponse(200, 'DELETED', undefined, origin);
 }
 
-// Publish AI Talk Catalog snapshot
+// --- Admin: Publish Snapshot Catalog ---
 export async function handlePublishAiTalkCatalog(env: Env, origin: string): Promise<Response> {
   const [categoriesRes, scenariosRes] = await Promise.all([
     env.DB.prepare('SELECT * FROM ai_talk_categories ORDER BY position ASC, code ASC').all<AiTalkCategory>(),
@@ -288,13 +238,4 @@ export async function handlePublishAiTalkCatalog(env: Env, origin: string): Prom
     .run();
 
   return successResponse(200, 'SUCCESS', { key: 'ai_talk_catalog', scenarios_count: scenarios.length }, origin);
-}
-
-function safeJsonParse<T>(jsonStr: string | null | undefined, fallback: T): T {
-  if (!jsonStr) return fallback;
-  try {
-    return JSON.parse(jsonStr) as T;
-  } catch {
-    return fallback;
-  }
 }

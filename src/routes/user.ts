@@ -1,11 +1,13 @@
 import {
   handleGetScenario,
+  handleListScenarios,
+} from '../features/ai-talk/scenario/handlers.ts';
+import {
   handleGetSession,
   handleListProfileSessions,
-  handleListScenarios,
   handleSessionMessage,
   handleStartSession,
-} from '../features/ai-talk/user-handlers.ts';
+} from '../features/ai-talk/session/handlers.ts';
 import {
   handleCreateProfile,
   handleDeleteProfile,

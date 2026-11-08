@@ -1,15 +1,17 @@
 import {
   handleCreateAdminCategory,
-  handleCreateAdminScenario,
   handleDeleteAdminCategory,
+  handleListAdminCategories,
+  handleUpdateAdminCategory,
+} from '../features/ai-talk/category/handlers.ts';
+import {
+  handleCreateAdminScenario,
   handleDeleteAdminScenario,
   handleGetAdminScenario,
-  handleListAdminCategories,
   handleListAdminScenarios,
   handlePublishAiTalkCatalog,
-  handleUpdateAdminCategory,
   handleUpdateAdminScenario,
-} from '../features/ai-talk/admin-handlers.ts';
+} from '../features/ai-talk/scenario/handlers.ts';
 import { errorResponse } from '../utils/response.ts';
 
 export async function routeAdminRequest(
