@@ -1,6 +1,6 @@
--- Seed mẫu tình huống: Ordering Pizza 🍕
+-- 5. Seed mẫu tình huống: Ordering Pizza 🍕
 INSERT INTO ai_talk_scenarios (
-  id, slug, title, description, ai_role, user_role, initial_prompt, first_message, difficulty, initial_focus_score, status, created_at, updated_at
+  id, slug, title, description, ai_role, user_role, initial_prompt, first_message, level, max_turns, initial_focus_score, created_at, updated_at
 ) VALUES (
   1,
   'ordering-pizza',
@@ -10,9 +10,9 @@ INSERT INTO ai_talk_scenarios (
   'Customer ordering pizza',
   'You are a friendly, enthusiastic waiter at Pizza Palace. Speak in simple, clear English suitable for learners. Guide the customer to complete their order without being rigid. If the customer goes off topic, politely steer them back to their pizza order.',
   'Hello! Welcome to Pizza Palace! What would you like to order today?',
-  'beginner',
+  'Starter',
+  20,
   100,
-  'published',
   1794118000000,
   1794118000000
 );

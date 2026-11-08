@@ -10,12 +10,11 @@ CREATE TABLE ai_talk_scenarios (
   first_message TEXT NOT NULL,                              -- Câu chào đầu tiên AI nói khi bắt đầu phiên
   icon_url TEXT,                                            -- Icon minh họa
   cover_url TEXT,                                           -- Ảnh bìa bối cảnh
-  difficulty TEXT NOT NULL DEFAULT 'beginner',              -- 'beginner' | 'intermediate' | 'advanced'
-  initial_focus_score INTEGER NOT NULL DEFAULT 100 CHECK (initial_focus_score > 0), -- Mặc định 100 điểm
-  status TEXT NOT NULL DEFAULT 'published',                 -- 'draft' | 'published' | 'archived'
+  level TEXT,                                               -- Cấp độ (ví dụ: 'A1', 'A2'...), không có default value
+  max_turns INTEGER NOT NULL DEFAULT 20 CHECK (max_turns > 0), -- Giới hạn tối đa số lượt nói trong 1 phiên
+  initial_focus_score INTEGER NOT NULL DEFAULT 100 CHECK (initial_focus_score > 0), -- Điểm tập trung ban đầu
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
 
 CREATE INDEX idx_ai_talk_scenarios_slug ON ai_talk_scenarios(slug);
-CREATE INDEX idx_ai_talk_scenarios_status ON ai_talk_scenarios(status, created_at DESC);
