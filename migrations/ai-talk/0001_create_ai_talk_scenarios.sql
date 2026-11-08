@@ -1,21 +1,17 @@
--- 1. Bảng tình huống hội thoại (Scenarios)
--- Quản lý bối cảnh chung, chủ đề, mức độ và thông tin hiển thị
+-- 1. Bảng tình huống rèn luyện (Scenarios)
+-- Đặt người học vào một tình huống và giao 1 nhiệm vụ cụ thể để rèn luyện ngôn ngữ
 CREATE TABLE ai_talk_scenarios (
-  id TEXT PRIMARY KEY,                                      -- UUIDv7
-  slug TEXT NOT NULL UNIQUE,                                -- Đường dẫn định danh (vd: 'at-pizza-store')
-  title TEXT NOT NULL,                                      -- Tiêu đề tình huống (vd: 'At the Pizza Store')
-  description TEXT,                                         -- Mô tả bối cảnh tình huống cho học sinh
-  level TEXT,                                               -- 'beginner' | 'intermediate' | 'advanced' (không default)
-  category TEXT NOT NULL DEFAULT 'daily_life',              -- Nhóm chủ đề: 'food_drink', 'school', 'animals', 'daily_life'
-  icon_url TEXT,                                            -- Icon minh họa
-  cover_url TEXT,                                           -- Ảnh bìa bối cảnh
-  order_index INTEGER NOT NULL DEFAULT 0,                   -- Thứ tự hiển thị ưu tiên
-  is_published INTEGER NOT NULL DEFAULT 0,                  -- 0: nháp, 1: đã xuất bản
-  published_at INTEGER,                                     -- Thời điểm xuất bản
-  created_at INTEGER NOT NULL,                              -- Unix timestamp
+  id TEXT PRIMARY KEY,                                         -- Mã tình huống (vd: 'order-pizza', 'ask-the-way')
+  title TEXT NOT NULL,                                         -- Tên bài luyện (vd: 'Ordering Pizza')
+  situation TEXT NOT NULL,                                     -- Bối cảnh (vd: 'Bạn đang ở một tiệm bánh pizza')
+  mission TEXT NOT NULL,                                       -- Nhiệm vụ giao cho người học (vd: 'Hãy gọi một chiếc pizza phô mai cỡ vừa mang về')
+  ai_role TEXT NOT NULL,                                       -- Vai trò AI đóng (vd: 'Nhân viên bán pizza thân thiện')
+  user_role TEXT NOT NULL,                                     -- Vai trò người học (vd: 'Khách mua bánh')
+  ai_prompt TEXT NOT NULL,                                     -- Hướng dẫn AI: tính cách, cách phản hồi ngắn gọn, nhận biết người học đã đạt nhiệm vụ
+  first_message TEXT NOT NULL,                                 -- Lời chào mở đầu của AI để bắt đầu tình huống
+  max_turns INTEGER NOT NULL DEFAULT 10 CHECK (max_turns > 0), -- Số lượt tối đa để người học hoàn thành nhiệm vụ
+  created_at INTEGER NOT NULL,                                 -- Unix timestamp
   updated_at INTEGER NOT NULL
 );
 
-CREATE INDEX idx_ai_talk_scenarios_slug ON ai_talk_scenarios(slug);
-CREATE INDEX idx_ai_talk_scenarios_category ON ai_talk_scenarios(category, order_index ASC);
-CREATE INDEX idx_ai_talk_scenarios_published ON ai_talk_scenarios(is_published);
+CREATE INDEX idx_ai_talk_scenarios_created ON ai_talk_scenarios(created_at DESC);
