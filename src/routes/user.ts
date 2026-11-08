@@ -1,8 +1,4 @@
 import {
-  handleGetScenario,
-  handleListScenarios,
-} from '../features/ai-talk/scenario/user.ts';
-import {
   handleGetSession,
   handleListProfileSessions,
   handleSessionMessage,
@@ -42,19 +38,6 @@ export async function routeUserRequest(
     const profileId = Number(profileMatch[1]);
     if (method === 'PUT') return handleUpdateProfile(request, profileId, userId, env, origin);
     if (method === 'DELETE') return handleDeleteProfile(profileId, userId, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  // --- AI Talk Scenarios ---
-  if (pathname === '/v1/my/ai-talk/scenarios') {
-    if (method === 'GET') return handleListScenarios(request, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  const scenarioMatch = pathname.match(/^\/v1\/my\/ai-talk\/scenarios\/([^/]+)$/);
-  if (scenarioMatch) {
-    const scenarioId = decodeURIComponent(scenarioMatch[1]);
-    if (method === 'GET') return handleGetScenario(scenarioId, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 

@@ -3,7 +3,7 @@ import {
   handleDeleteAdminCategory,
   handleListAdminCategories,
   handleUpdateAdminCategory,
-} from '../features/ai-talk/category/admin.ts';
+} from '../features/ai-talk/category/handlers.ts';
 import {
   handleCreateAdminScenario,
   handleDeleteAdminScenario,
@@ -11,7 +11,7 @@ import {
   handleListAdminScenarios,
   handlePublishAiTalkCatalog,
   handleUpdateAdminScenario,
-} from '../features/ai-talk/scenario/admin.ts';
+} from '../features/ai-talk/scenario/handlers.ts';
 import {
   handleDeleteAdminSession,
   handleGetAdminSession,
