@@ -17,10 +17,10 @@ export default {
     if (pathname === '/' || pathname === '/info') {
       return new Response(JSON.stringify({
         name: 'english-kids-worker',
-        version: '1.7.5',
+        version: '2.0.0',
         api: {
           admin: '/v1/admin',
-          user: '/v1',
+          user: '/v1/my',
         },
       }), {
         headers: {
@@ -36,12 +36,12 @@ export default {
       return routeAdminRequest(request, env, origin, pathname);
     }
 
-    if (pathname === '/v1' || pathname.startsWith('/v1/')) {
+    if (pathname === '/v1/my' || pathname.startsWith('/v1/my/') || pathname === '/v1' || pathname.startsWith('/v1/')) {
       const auth = await requireUser(request, env, origin);
       if (!auth.ok) return auth.response;
-      return routeUserRequest(request, env, origin, pathname, auth.payload.sub, auth.payload.role);
+      return routeUserRequest(request, env, origin, pathname, auth.payload.sub);
     }
 
-    return errorResponse(404, 'NOT_FOUND', 'Endpoint not found', origin);
+    return errorResponse(404, 'NOT_FOUND', undefined, origin);
   },
 } satisfies ExportedHandler<Env>;

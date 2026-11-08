@@ -9,6 +9,7 @@ const messages: Record<string, string> = {
   UNAUTHORIZED: 'Vui lòng đăng nhập để thực hiện thao tác này.',
   FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
   NOT_FOUND: 'Không tìm thấy nội dung bạn yêu cầu.',
+  METHOD_NOT_ALLOWED: 'Phương thức không được hỗ trợ.',
   CONFLICT: 'Thông tin này đã tồn tại trong hệ thống.',
 };
 
