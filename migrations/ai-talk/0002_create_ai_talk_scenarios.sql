@@ -2,7 +2,7 @@
 -- Thuộc về một danh mục và giao 1 nhiệm vụ cụ thể cho người học thực hiện
 CREATE TABLE ai_talk_scenarios (
   id TEXT PRIMARY KEY,                                         -- Mã tình huống (vd: 'order-pizza')
-  category_id TEXT REFERENCES ai_talk_categories(id) ON DELETE SET NULL, -- Danh mục chủ đề cha
+  category_code TEXT REFERENCES ai_talk_categories(code) ON DELETE SET NULL, -- Danh mục chủ đề
   title TEXT NOT NULL,                                         -- Tên bài luyện (vd: 'Ordering Pizza')
   situation TEXT NOT NULL,                                     -- Bối cảnh (vd: 'Bạn đang ở một tiệm bánh pizza')
   mission TEXT NOT NULL,                                       -- Nhiệm vụ giao cho người học (vd: 'Hãy gọi một chiếc pizza phô mai cỡ vừa mang về')
@@ -15,5 +15,5 @@ CREATE TABLE ai_talk_scenarios (
   updated_at INTEGER NOT NULL
 );
 
-CREATE INDEX idx_ai_talk_scenarios_category ON ai_talk_scenarios(category_id);
+CREATE INDEX idx_ai_talk_scenarios_category ON ai_talk_scenarios(category_code);
 CREATE INDEX idx_ai_talk_scenarios_created ON ai_talk_scenarios(created_at DESC);
