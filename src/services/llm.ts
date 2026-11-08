@@ -72,7 +72,8 @@ You MUST respond strictly with a valid JSON object matching this schema:
         'X-Caller': 'english-kids-worker',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemInstructions },
           ...conversationHistory,
@@ -153,7 +154,8 @@ Respond ONLY with the hint text. Do not wrap in JSON or add explanation.`;
         'X-Caller': 'english-kids-worker',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemInstructions },
           { role: 'user', content: 'Give me a hint on what to say.' },

@@ -265,11 +265,38 @@ async function executeTurn(
     return errorResponse(400, 'BAD_REQUEST', 'Đã đạt số lượt tối đa của bài luyện', origin);
   }
 
-  const scenario = await env.DB.prepare(
-    'SELECT * FROM ai_talk_scenarios WHERE id = ?',
+  let scenario: AiTalkScenario | null = null;
+  const catalogRow = await env.DB.prepare(
+    'SELECT payload FROM published_catalogs WHERE key = ?',
   )
-    .bind(session.scenario_id)
-    .first<AiTalkScenario>();
+    .bind('ai_talk_catalog')
+    .first<{ payload: string }>();
+
+  if (catalogRow?.payload) {
+    const catalogJson = safeJsonParse<{ data?: { scenarios?: AiTalkScenario[] } }>(catalogRow.payload, {});
+    const found = catalogJson.data?.scenarios?.find(s => s.id === session.scenario_id);
+    if (found) {
+      scenario = {
+        ...found,
+        missions: typeof found.missions === 'string' ? safeJsonParse(found.missions, []) : (found.missions ?? []),
+      };
+    }
+  }
+
+  if (!scenario) {
+    const fromDb = await env.DB.prepare(
+      'SELECT * FROM ai_talk_scenarios WHERE id = ?',
+    )
+      .bind(session.scenario_id)
+      .first<AiTalkScenario>();
+
+    if (fromDb) {
+      scenario = {
+        ...fromDb,
+        missions: typeof fromDb.missions === 'string' ? safeJsonParse(fromDb.missions, []) : (fromDb.missions ?? []),
+      };
+    }
+  }
 
   if (!scenario) {
     return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy tình huống của phiên này', origin);
