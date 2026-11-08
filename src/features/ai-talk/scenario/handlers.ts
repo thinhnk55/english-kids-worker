@@ -163,11 +163,50 @@ export async function handlePublishAiTalkCatalog(env: Env, origin: string): Prom
     missions: typeof s.missions === 'string' ? safeJsonParse(s.missions, []) : s.missions,
   }));
 
+  // Build taxonomy tree
+  const scenarioMap = new Map<string, typeof scenarios>();
+  for (const s of scenarios) {
+    const cat = s.category || 'other';
+    const list = scenarioMap.get(cat) ?? [];
+    list.push(s);
+    scenarioMap.set(cat, list);
+  }
+
+  const categoryMap = new Map<string, {
+    code: string;
+    parent_code: string | null;
+    name: string;
+    position: number;
+    children: unknown[];
+    scenarios: typeof scenarios;
+  }>();
+
+  for (const c of categories) {
+    categoryMap.set(c.code, {
+      ...c,
+      children: [],
+      scenarios: scenarioMap.get(c.code) ?? [],
+    });
+  }
+
+  const taxonomy: unknown[] = [];
+  for (const c of categories) {
+    const node = categoryMap.get(c.code)!;
+    if (c.parent_code && categoryMap.has(c.parent_code)) {
+      categoryMap.get(c.parent_code).children.push(node);
+    } else {
+      taxonomy.push(node);
+    }
+  }
+
+  const publishedAt = new Date().toISOString();
   const payload = JSON.stringify({
     success: true,
     code: 200,
     messageCode: 'SUCCESS',
     data: {
+      published_at: publishedAt,
+      taxonomy,
       categories,
       scenarios,
     },
@@ -181,5 +220,10 @@ export async function handlePublishAiTalkCatalog(env: Env, origin: string): Prom
     .bind('ai_talk_catalog', payload)
     .run();
 
-  return successResponse(200, 'SUCCESS', { key: 'ai_talk_catalog', scenarios_count: scenarios.length }, origin);
+  return successResponse(200, 'SUCCESS', {
+    key: 'ai_talk_catalog',
+    categories_count: categories.length,
+    scenarios_count: scenarios.length,
+    published_at: publishedAt,
+  }, origin);
 }
