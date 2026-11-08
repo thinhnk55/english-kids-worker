@@ -1,4 +1,4 @@
-import { evaluateAndReplyAiTalk } from '../../../services/llm.ts';
+import { evaluateAndReplyAiTalk, generateDynamicHint } from '../../../services/llm.ts';
 import { transcribeAudio } from '../../../services/stt.ts';
 import { synthesizeSpeech } from '../../../services/tts.ts';
 import type { AiTalkMission, AiTalkScenario, AiTalkSession, ChatMessage } from '../../../types/ai-talk.ts';
@@ -366,4 +366,57 @@ export function formatSession(session: AiTalkSession | null | undefined) {
       ? safeJsonParse(session.messages, [])
       : session.messages,
   };
+}
+
+export async function handleGetSessionHint(
+  sessionId: number,
+  userId: number,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const session = await env.DB.prepare(
+    'SELECT * FROM ai_talk_sessions WHERE id = ? AND user_id = ?',
+  )
+    .bind(sessionId, userId)
+    .first<AiTalkSession>();
+
+  if (!session) {
+    return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy phiên', origin);
+  }
+
+  let scenario: AiTalkScenario | null = null;
+  const catalogRow = await env.DB.prepare(
+    'SELECT payload FROM published_catalogs WHERE key = ?',
+  )
+    .bind('ai_talk_catalog')
+    .first<{ payload: string }>();
+
+  if (catalogRow?.payload) {
+    const catalogJson = safeJsonParse<{ data?: { scenarios?: AiTalkScenario[] } }>(catalogRow.payload, {});
+    const found = catalogJson.data?.scenarios?.find(s => s.id === session.scenario_id);
+    if (found) scenario = found;
+  }
+
+  if (!scenario) {
+    scenario = await env.DB.prepare('SELECT * FROM ai_talk_scenarios WHERE id = ?')
+      .bind(session.scenario_id)
+      .first<AiTalkScenario>();
+  }
+
+  const messages = safeJsonParse<ChatMessage[]>(session.messages as string, []);
+  const completedMissions = safeJsonParse<string[]>(session.completed_missions as string, []);
+  const missions = scenario ? (typeof scenario.missions === 'string' ? safeJsonParse<AiTalkMission[]>(scenario.missions, []) : (scenario.missions ?? [])) : [];
+
+  const nextMission = missions.find(m => !completedMissions.includes(m.code || (m as any).id));
+  const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant')?.content || '';
+
+  const hint = await generateDynamicHint(env, {
+    situation: scenario?.situation || 'General conversation',
+    aiRole: scenario?.ai_role || 'Tutor',
+    userRole: scenario?.user_role || 'Student',
+    nextMissionGoal: nextMission ? ((nextMission as any).goal || nextMission.text) : undefined,
+    lastAssistantMessage: lastAssistantMsg,
+  });
+
+  return successResponse(200, 'SUCCESS', { hint }, origin);
 }

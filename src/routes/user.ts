@@ -1,6 +1,7 @@
 import {
   handleGetMessageAudio,
   handleGetSession,
+  handleGetSessionHint,
   handleListProfileSessions,
   handleSessionMessage,
   handleSessionVoiceMessage,
@@ -86,6 +87,14 @@ export async function routeUserRequest(
   if (sessionMessagesMatch) {
     const sessionId = Number(sessionMessagesMatch[1]);
     if (method === 'POST') return handleSessionMessage(request, sessionId, userId, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  // Lấy gợi ý on-demand từ AI
+  const sessionHintMatch = pathname.match(/^\/v1\/(?:my\/)?ai-talk\/sessions\/(\d+)\/hint$/);
+  if (sessionHintMatch) {
+    const sessionId = Number(sessionHintMatch[1]);
+    if (method === 'GET' || method === 'POST') return handleGetSessionHint(sessionId, userId, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 

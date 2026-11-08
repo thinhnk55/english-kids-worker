@@ -118,3 +118,62 @@ function fallbackResult(previouslyCompleted: string[]): LlmTalkTurnResult {
     score: 75,
   };
 }
+
+export async function generateDynamicHint(
+  env: Env,
+  params: {
+    situation: string;
+    aiRole: string;
+    userRole: string;
+    nextMissionGoal?: string;
+    lastAssistantMessage?: string;
+  },
+): Promise<string> {
+  const internalKey = env.INTERNAL_API_KEY || '751791ddb95fcb30db0330b2ea7c9bc9f15c4eee3f5d8ab968449988b4ef0d7c';
+
+  const systemInstructions = `You are a warm, supportive English coach for kids learning English.
+The child is in a roleplay conversation and needs a quick, practical hint on what to reply right now.
+Context:
+- Scenario: ${params.situation}
+- AI partner (${params.aiRole}) just said: "${params.lastAssistantMessage || ''}"
+- Next mission / goal for the child: "${params.nextMissionGoal || 'Continue conversation naturally'}"
+
+Instruction:
+Provide 1 very simple, encouraging sentence suggesting what the child can say in English.
+Keep vocabulary simple and natural.
+Example: "You can say: 'I want chocolate, please!'" or "Try asking: 'How much does it cost?'"
+Respond ONLY with the hint text. Do not wrap in JSON or add explanation.`;
+
+  try {
+    const response = await env.LLM_SERVICE.fetch('https://llm-worker/v1/internal/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'X-Internal-Key': internalKey,
+        'X-Caller': 'english-kids-worker',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemInstructions },
+          { role: 'user', content: 'Give me a hint on what to say.' },
+        ],
+        temperature: 0.5,
+      }),
+    });
+
+    if (!response.ok) {
+      return `Try saying: "I'd like that, please!"`;
+    }
+
+    const json = await response.json() as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+
+    const content = json.choices?.[0]?.message?.content?.trim();
+    return content || `Try saying: "Yes, please!"`;
+  } catch (error) {
+    console.error('Failed to generate hint:', error);
+    return `Try saying: "Yes, please!"`;
+  }
+}
