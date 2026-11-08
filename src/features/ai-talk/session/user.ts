@@ -77,7 +77,7 @@ export async function handleStartSession(
        user_id, profile_id, scenario_id, status, turns_count, max_turns,
        completed_missions, score, messages, feedback, created_at, updated_at
      )
-     VALUES (?, ?, ?, 'in_progress', 0, ?, '[]', NULL, ?, NULL, ?, ?)
+     VALUES (?, ?, ?, 'in_progress', 0, ?, '[]', 100, ?, NULL, ?, ?)
      RETURNING *`,
   )
     .bind(
@@ -321,6 +321,8 @@ async function executeTurn(
   };
   const updatedMessages = [...existingMessages, userMsg];
 
+  const currentScore = typeof session.score === 'number' ? session.score : 100;
+
   const turnResult = await evaluateAndReplyAiTalk(env, {
     situation: scenario.situation,
     aiRole: scenario.ai_role,
@@ -331,31 +333,43 @@ async function executeTurn(
     messages: updatedMessages,
     turnsCount: session.turns_count,
     maxTurns: session.max_turns,
+    currentScore,
   });
+
+  // Attach per-message feedback directly to the user's message
+  userMsg.feedback = turnResult.feedback;
 
   const assistantMsg: ChatMessage = {
     role: 'assistant',
     content: turnResult.reply,
     timestamp: Date.now(),
-    feedback: turnResult.feedback,
   };
   updatedMessages.push(assistantMsg);
+
+  const penalty = turnResult.feedback?.relevance?.penalty ?? 0;
+  const newFocusScore = Math.max(0, currentScore + penalty);
 
   const newTurnsCount = session.turns_count + 1;
   const now = Math.floor(Date.now() / 1000);
 
   let newStatus: AiTalkSession['status'] = 'in_progress';
-  let finalScore: number | null = session.score;
+  let finalScore: number = newFocusScore;
   let finalFeedback: string | null = session.feedback;
 
   if (turnResult.is_all_completed) {
     newStatus = 'completed';
-    finalScore = turnResult.score ?? 100;
-    finalFeedback = turnResult.feedback?.praise || 'Tuyệt vời! Con đã hoàn thành tất cả nhiệm vụ!';
+    finalScore = newFocusScore;
+    finalFeedback = turnResult.feedback?.praise
+      ? `Xuất sắc! Đã hoàn thành mọi mục tiêu với Focus Score: ${newFocusScore}/100. ${turnResult.feedback.praise}`
+      : `Xuất sắc! Đã hoàn thành mọi mục tiêu với Focus Score: ${newFocusScore}/100.`;
+  } else if (newFocusScore <= 0) {
+    newStatus = 'failed';
+    finalScore = 0;
+    finalFeedback = 'Nhiệm vụ thất bại do điểm tập trung (Focus Score) về 0 (lạc đề quá nhiều).';
   } else if (newTurnsCount >= session.max_turns) {
     newStatus = 'failed';
-    finalScore = turnResult.score ?? 60;
-    finalFeedback = 'Hết lượt nói chuyện. Con hãy thử lại để hoàn thành nhé!';
+    finalScore = newFocusScore;
+    finalFeedback = `Đã đạt giới hạn ${session.max_turns} lượt thoại mà chưa hoàn thành toàn bộ mục tiêu.`;
   }
 
   const updated = await env.DB.prepare(

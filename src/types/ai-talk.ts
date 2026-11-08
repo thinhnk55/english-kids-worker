@@ -24,9 +24,21 @@ export interface AiTalkScenario {
 }
 
 export interface ChatMessageFeedback {
+  accuracy?: {
+    is_correct: boolean;
+    issue?: string;
+  };
+  relevance?: {
+    level: 'on_topic' | 'slight_off_topic' | 'completely_off_topic' | 'intentional_off_topic';
+    penalty: number;
+    note?: string;
+  };
+  naturalness?: {
+    suggestion?: string;
+  };
+  praise?: string;
   grammar?: string;
   suggestion?: string;
-  praise?: string;
 }
 
 export interface ChatMessage {
