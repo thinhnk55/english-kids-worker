@@ -11,8 +11,7 @@ CREATE TABLE ai_talk_sessions (
   messages TEXT NOT NULL DEFAULT '[]',                         -- JSON array toàn bộ tin nhắn qua lại giữa bé và AI
   feedback TEXT,                                               -- Đánh giá, khen ngợi và gợi ý cải thiện ngôn ngữ sau khi kết thúc
   created_at INTEGER NOT NULL,                                 -- Unix timestamp bắt đầu phiên
-  updated_at INTEGER NOT NULL,                                 -- Unix timestamp tương tác gần nhất
-  ended_at INTEGER                                             -- Unix timestamp khi hoàn thành hoặc kết thúc
+  updated_at INTEGER NOT NULL                                  -- Unix timestamp tương tác gần nhất
 );
 
 CREATE INDEX idx_ai_talk_sessions_user ON ai_talk_sessions(user_id, created_at DESC);
