@@ -9,6 +9,7 @@ interface __BaseEnv_Env {
 	R2_SECRET_ACCESS_KEY: string;
 	LLM_BASE_URL?: string;
 	INTERNAL_API_KEY?: string;
+	LLM_SERVICE?: Fetcher;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

@@ -22,8 +22,16 @@ export async function evaluateAndReplyAiTalk(
     maxTurns: number;
   },
 ): Promise<LlmTalkTurnResult> {
-  const llmBaseUrl = env.LLM_BASE_URL || 'https://llm.hocnhe.com';
   const internalKey = env.INTERNAL_API_KEY || '751791ddb95fcb30db0330b2ea7c9bc9f15c4eee3f5d8ab968449988b4ef0d7c';
+
+  // Ưu tiên gọi nội bộ qua Cloudflare Service Binding (zero network latency)
+  const caller = env.LLM_SERVICE
+    ? env.LLM_SERVICE.fetch.bind(env.LLM_SERVICE)
+    : fetch;
+
+  const targetUrl = env.LLM_SERVICE
+    ? 'https://llm-worker/v1/internal/chat/completions'
+    : `${env.LLM_BASE_URL || 'https://llm.hocnhe.com'}/v1/internal/chat/completions`;
 
   const systemInstructions = `You are a friendly, encouraging English conversation partner for kids learning English.
 Current Scenario:
@@ -65,7 +73,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
   }));
 
   try {
-    const response = await fetch(`${llmBaseUrl}/v1/internal/chat/completions`, {
+    const response = await caller(targetUrl, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

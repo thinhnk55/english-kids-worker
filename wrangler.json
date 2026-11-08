@@ -23,6 +23,12 @@
 			"binding": "ASSETS"
 		}
 	],
+	"services": [
+		{
+			"binding": "LLM_SERVICE",
+			"service": "llm-worker"
+		}
+	],
 	"routes": [
 		{
 			"pattern": "english-kids-api.hocnhe.com",
