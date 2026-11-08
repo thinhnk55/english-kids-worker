@@ -37,7 +37,7 @@ export interface ChatMessage {
 }
 
 export interface AiTalkSession {
-  id: string;
+  id: number;
   user_id: number;
   profile_id: number | null;
   scenario_id: string;

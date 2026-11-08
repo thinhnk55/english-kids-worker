@@ -2,7 +2,6 @@ import { evaluateAndReplyAiTalk } from '../../../services/llm.ts';
 import type { AiTalkMission, AiTalkScenario, AiTalkSession, ChatMessage } from '../../../types/ai-talk.ts';
 import { safeJsonParse } from '../../../utils/json.ts';
 import { errorResponse, successResponse } from '../../../utils/response.ts';
-import { generateUUIDv7 } from '../../../utils/uuid.ts';
 
 export async function handleStartSession(
   request: Request,
@@ -32,7 +31,6 @@ export async function handleStartSession(
     return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy tình huống', origin);
   }
 
-  const sessionId = generateUUIDv7();
   const now = Math.floor(Date.now() / 1000);
 
   const initialMessages: ChatMessage[] = [
@@ -45,14 +43,13 @@ export async function handleStartSession(
 
   const session = await env.DB.prepare(
     `INSERT INTO ai_talk_sessions (
-       id, user_id, profile_id, scenario_id, status, turns_count, max_turns,
+       user_id, profile_id, scenario_id, status, turns_count, max_turns,
        completed_missions, score, messages, feedback, created_at, updated_at
      )
-     VALUES (?, ?, ?, ?, 'in_progress', 0, ?, '[]', NULL, ?, NULL, ?, ?)
+     VALUES (?, ?, ?, 'in_progress', 0, ?, '[]', NULL, ?, NULL, ?, ?)
      RETURNING *`,
   )
     .bind(
-      sessionId,
       userId,
       profileId,
       scenarioId,
@@ -67,7 +64,7 @@ export async function handleStartSession(
 }
 
 export async function handleGetSession(
-  sessionId: string,
+  sessionId: number,
   userId: number,
   env: Env,
   origin: string,
@@ -118,7 +115,7 @@ export async function handleListProfileSessions(
 
 export async function handleSessionMessage(
   request: Request,
-  sessionId: string,
+  sessionId: number,
   userId: number,
   env: Env,
   origin: string,

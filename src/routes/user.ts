@@ -48,16 +48,16 @@ export async function routeUserRequest(
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
-  const sessionMessagesMatch = pathname.match(/^\/v1\/my\/ai-talk\/sessions\/([^/]+)\/messages$/);
+  const sessionMessagesMatch = pathname.match(/^\/v1\/my\/ai-talk\/sessions\/(\d+)\/messages$/);
   if (sessionMessagesMatch) {
-    const sessionId = decodeURIComponent(sessionMessagesMatch[1]);
+    const sessionId = Number(sessionMessagesMatch[1]);
     if (method === 'POST') return handleSessionMessage(request, sessionId, userId, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
-  const sessionMatch = pathname.match(/^\/v1\/my\/ai-talk\/sessions\/([^/]+)$/);
+  const sessionMatch = pathname.match(/^\/v1\/my\/ai-talk\/sessions\/(\d+)$/);
   if (sessionMatch) {
-    const sessionId = decodeURIComponent(sessionMatch[1]);
+    const sessionId = Number(sessionMatch[1]);
     if (method === 'GET') return handleGetSession(sessionId, userId, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }

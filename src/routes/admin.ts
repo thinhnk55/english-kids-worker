@@ -70,9 +70,9 @@ export async function routeAdminRequest(
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
-  const sessionMatch = pathname.match(/^\/v1\/admin\/ai-talk\/sessions\/([^/]+)$/);
+  const sessionMatch = pathname.match(/^\/v1\/admin\/ai-talk\/sessions\/(\d+)$/);
   if (sessionMatch) {
-    const id = decodeURIComponent(sessionMatch[1]);
+    const id = Number(sessionMatch[1]);
     if (method === 'GET') return handleGetAdminSession(id, env, origin);
     if (method === 'DELETE') return handleDeleteAdminSession(id, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);

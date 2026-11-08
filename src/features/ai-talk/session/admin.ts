@@ -42,7 +42,7 @@ export async function handleListAdminSessions(
 }
 
 export async function handleGetAdminSession(
-  sessionId: string,
+  sessionId: number,
   env: Env,
   origin: string,
 ): Promise<Response> {
@@ -60,7 +60,7 @@ export async function handleGetAdminSession(
 }
 
 export async function handleDeleteAdminSession(
-  sessionId: string,
+  sessionId: number,
   env: Env,
   origin: string,
 ): Promise<Response> {
