@@ -30,25 +30,6 @@ export default {
       });
     }
 
-    if (pathname === '/v1/admin/clean-r2' && request.headers.get('X-Clean-Key') === 'clean-english-kids-r2-2026') {
-      let count = 0;
-      let truncated = true;
-      let cursor: string | undefined = undefined;
-      while (truncated) {
-        const list = await env.ASSETS.list({ cursor, limit: 1000 });
-        const keys = list.objects.map((o) => o.key);
-        if (keys.length > 0) {
-          await env.ASSETS.delete(keys);
-          count += keys.length;
-        }
-        truncated = list.truncated;
-        cursor = list.truncated ? list.cursor : undefined;
-      }
-      return new Response(JSON.stringify({ success: true, deleted_count: count }), {
-        headers: { 'content-type': 'application/json' },
-      });
-    }
-
     if (pathname === '/v1/admin' || pathname.startsWith('/v1/admin/')) {
       const auth = await requireAdmin(request, env, origin);
       if (!auth.ok) return auth.response;
