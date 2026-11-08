@@ -23,11 +23,40 @@ export async function handleStartSession(
   const scenarioId = body.scenario_id.trim();
   const profileId = typeof body.profile_id === 'number' ? body.profile_id : null;
 
-  const scenario = await env.DB.prepare(
-    'SELECT * FROM ai_talk_scenarios WHERE id = ?',
+  // 1. Ưu tiên tìm trong published catalog
+  let scenario: AiTalkScenario | null = null;
+  const catalogRow = await env.DB.prepare(
+    'SELECT payload FROM published_catalogs WHERE key = ?',
   )
-    .bind(scenarioId)
-    .first<AiTalkScenario>();
+    .bind('ai_talk_catalog')
+    .first<{ payload: string }>();
+
+  if (catalogRow?.payload) {
+    const catalogJson = safeJsonParse<{ data?: { scenarios?: AiTalkScenario[] } }>(catalogRow.payload, {});
+    const found = catalogJson.data?.scenarios?.find(s => s.id === scenarioId);
+    if (found) {
+      scenario = {
+        ...found,
+        missions: typeof found.missions === 'string' ? safeJsonParse(found.missions, []) : (found.missions ?? []),
+      };
+    }
+  }
+
+  // 2. Dự phòng tìm trong bảng nháp ai_talk_scenarios
+  if (!scenario) {
+    const fromDb = await env.DB.prepare(
+      'SELECT * FROM ai_talk_scenarios WHERE id = ?',
+    )
+      .bind(scenarioId)
+      .first<AiTalkScenario>();
+
+    if (fromDb) {
+      scenario = {
+        ...fromDb,
+        missions: typeof fromDb.missions === 'string' ? safeJsonParse(fromDb.missions, []) : (fromDb.missions ?? []),
+      };
+    }
+  }
 
   if (!scenario) {
     return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy tình huống', origin);
