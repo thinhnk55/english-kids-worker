@@ -154,13 +154,15 @@ export async function handleSessionMessage(
 ): Promise<Response> {
   const body = await request.json().catch(() => null) as {
     message?: string;
+    content?: string;
   } | null;
 
-  if (!body || !body.message || typeof body.message !== 'string' || !body.message.trim()) {
+  const textContent = body?.message || body?.content;
+  if (!body || !textContent || typeof textContent !== 'string' || !textContent.trim()) {
     return errorResponse(400, 'VALIDATION_ERROR', 'Tin nhắn không được để trống', origin);
   }
 
-  return await executeTurn(sessionId, userId, body.message.trim(), env, origin);
+  return await executeTurn(sessionId, userId, textContent.trim(), env, origin);
 }
 
 // Xử lý gửi tin nhắn dạng giọng nói (Audio Voice -> STT -> LLM Reply)
