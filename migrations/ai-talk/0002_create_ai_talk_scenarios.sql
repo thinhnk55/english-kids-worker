@@ -10,10 +10,7 @@ CREATE TABLE ai_talk_scenarios (
   user_role TEXT NOT NULL,                                     -- Vai trò người học (vd: 'Khách mua bánh')
   ai_prompt TEXT NOT NULL,                                     -- Hướng dẫn AI: tính cách, phản hồi ngắn, kiểm tra đạt nhiệm vụ
   first_message TEXT NOT NULL,                                 -- Lời mở đầu của AI
-  max_turns INTEGER NOT NULL DEFAULT 10 CHECK (max_turns > 0), -- Số lượt tối đa để hoàn thành nhiệm vụ
-  created_at INTEGER NOT NULL,                                 -- Unix timestamp
-  updated_at INTEGER NOT NULL
+  max_turns INTEGER NOT NULL DEFAULT 10 CHECK (max_turns > 0)  -- Số lượt tối đa để hoàn thành nhiệm vụ
 );
 
 CREATE INDEX idx_ai_talk_scenarios_category ON ai_talk_scenarios(category);
-CREATE INDEX idx_ai_talk_scenarios_created ON ai_talk_scenarios(created_at DESC);
