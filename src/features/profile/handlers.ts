@@ -17,10 +17,10 @@ export async function handleGetParent(
   const now = Math.floor(Date.now() / 1000);
 
   if (!parent) {
-    // Tự động khởi tạo cấu hình phụ huynh mặc định nếu chưa có
+    // Tự động khởi tạo cấu hình phụ huynh mặc định nếu chưa có (mặc định 5 profile)
     parent = await env.DB.prepare(
       `INSERT INTO parent (user_id, default_profile, max_profiles, created_at, updated_at)
-       VALUES (?, NULL, 2, ?, ?)
+       VALUES (?, NULL, 5, ?, ?)
        RETURNING *`,
     )
       .bind(userId, now, now)
@@ -39,7 +39,7 @@ export async function handleGetParent(
     {
       user_id: userId,
       default_profile: parent?.default_profile ?? null,
-      max_profiles: parent?.max_profiles ?? 2,
+      max_profiles: parent?.max_profiles ?? 5,
       profiles_count: countRow?.count ?? 0,
       created_at: parent?.created_at ?? now,
       updated_at: parent?.updated_at ?? now,
@@ -80,7 +80,7 @@ export async function handleSetDefaultProfile(
 
   await env.DB.prepare(
     `INSERT INTO parent (user_id, default_profile, max_profiles, created_at, updated_at)
-     VALUES (?, ?, 2, ?, ?)
+     VALUES (?, ?, 5, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET
        default_profile = excluded.default_profile,
        updated_at = excluded.updated_at`,
@@ -125,14 +125,14 @@ export async function handleCreateProfile(
     return errorResponse(400, 'VALIDATION_ERROR', 'Tên hồ sơ không được để trống', origin);
   }
 
-  // 1. Kiểm tra giới hạn số lượng hồ sơ từ bảng parent
+  // 1. Kiểm tra giới hạn số lượng hồ sơ từ bảng parent (mặc định 5)
   const parent = await env.DB.prepare(
     'SELECT default_profile, max_profiles FROM parent WHERE user_id = ?',
   )
     .bind(userId)
     .first<{ default_profile: number | null; max_profiles: number }>();
 
-  const maxProfiles = parent?.max_profiles ?? 2;
+  const maxProfiles = parent?.max_profiles ?? 5;
 
   const countRow = await env.DB.prepare(
     'SELECT COUNT(*) as count FROM english_kids_profile WHERE user_id = ?',
