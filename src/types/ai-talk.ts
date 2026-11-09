@@ -1,3 +1,10 @@
+export interface AiTalkCategory {
+  code: string;
+  parent_code: string | null;
+  name: string;
+  position: number;
+}
+
 export interface AiTalkScenarioRow {
   code: string;
   name: string;

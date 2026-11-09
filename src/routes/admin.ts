@@ -1,4 +1,10 @@
 import {
+  handleCreateCategory,
+  handleDeleteCategory,
+  handleListCategories,
+  handleUpdateCategory,
+} from '../features/ai-talk/category/handlers.ts';
+import {
   handleCreateAdminScenario,
   handleDeleteAdminScenario,
   handleListScenarios,
@@ -18,6 +24,21 @@ export async function routeAdminRequest(
   pathname: string,
 ): Promise<Response> {
   const method = request.method;
+
+  // --- Categories (Admin CRUD) ---
+  if (pathname === '/v1/admin/ai-talk/categories') {
+    if (method === 'GET') return handleListCategories(request, env, origin);
+    if (method === 'POST') return handleCreateCategory(request, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  const categoryMatch = pathname.match(/^\/v1\/admin\/ai-talk\/categories\/([^/]+)$/);
+  if (categoryMatch) {
+    const code = decodeURIComponent(categoryMatch[1]);
+    if (method === 'PUT') return handleUpdateCategory(request, code, env, origin);
+    if (method === 'DELETE') return handleDeleteCategory(code, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
 
   // --- Scenarios (Admin CRUD) ---
   if (pathname === '/v1/admin/ai-talk/scenarios') {

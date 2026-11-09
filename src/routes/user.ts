@@ -1,3 +1,4 @@
+import { handleListCategories } from '../features/ai-talk/category/handlers.ts';
 import { handleListScenarios } from '../features/ai-talk/scenario/handlers.ts';
 import {
   handleGetSession,
@@ -48,6 +49,12 @@ export async function routeUserRequest(
     const profileId = Number(profileMatch[1]);
     if (method === 'PUT') return handleUpdateProfile(request, profileId, userId, env, origin);
     if (method === 'DELETE') return handleDeleteProfile(profileId, userId, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  // --- Categories (Danh mục kịch bản phân cấp) ---
+  if (pathname === '/v1/my/ai-talk/categories' || pathname === '/v1/ai-talk/categories') {
+    if (method === 'GET') return handleListCategories(request, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 

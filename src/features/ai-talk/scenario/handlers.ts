@@ -46,13 +46,13 @@ export async function handleCreateAdminScenario(
 ): Promise<Response> {
   const body = await request.json().catch(() => null) as Partial<AiTalkScenarioRow> | null;
 
-  if (!body || !body.code || !body.name) {
-    return errorResponse(400, 'VALIDATION_ERROR', 'Mã (code) và tên (name) kịch bản là bắt buộc', origin);
+  if (!body || !body.code || !body.name || !body.category) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'Mã (code), tên (name) và danh mục (category) là bắt buộc', origin);
   }
 
   const code = body.code.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
   const name = body.name.trim();
-  const category = (body.category || 'general').trim();
+  const category = body.category.trim();
   const creditCost = Math.max(Number(body.credit_cost) || 1, 0);
   const maxTurns = Math.max(Number(body.max_turns) || 10, 1);
   const now = Math.floor(Date.now() / 1000);
@@ -63,6 +63,14 @@ export async function handleCreateAdminScenario(
 
   if (existing) {
     return errorResponse(409, 'CONFLICT', 'Mã kịch bản đã tồn tại', origin);
+  }
+
+  const catCheck = await env.DB.prepare('SELECT code FROM ai_talk_categories WHERE code = ?')
+    .bind(category)
+    .first();
+
+  if (!catCheck) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'Danh mục (category) không tồn tại', origin);
   }
 
   const created = await env.DB.prepare(
@@ -93,7 +101,17 @@ export async function handleUpdateAdminScenario(
   }
 
   const name = body?.name ? body.name.trim() : existing.name;
-  const category = body?.category ? body.category.trim() : existing.category;
+  let category = existing.category;
+  if (body?.category) {
+    category = body.category.trim();
+    const catCheck = await env.DB.prepare('SELECT code FROM ai_talk_categories WHERE code = ?')
+      .bind(category)
+      .first();
+    if (!catCheck) {
+      return errorResponse(400, 'VALIDATION_ERROR', 'Danh mục (category) không tồn tại', origin);
+    }
+  }
+
   const creditCost = body?.credit_cost !== undefined ? Math.max(Number(body.credit_cost) || 1, 0) : existing.credit_cost;
   const maxTurns = body?.max_turns !== undefined ? Math.max(Number(body.max_turns) || 10, 1) : existing.max_turns;
   const now = Math.floor(Date.now() / 1000);
