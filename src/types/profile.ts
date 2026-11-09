@@ -12,6 +12,7 @@ export interface EnglishKidsProfile {
 
 export interface EnglishKidsParent {
   user_id: number;
+  default_profile: number | null;
   max_profiles: number;
   created_at: number;
   updated_at: number;

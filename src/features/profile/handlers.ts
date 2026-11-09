@@ -19,8 +19,8 @@ export async function handleGetParent(
   if (!parent) {
     // Tự động khởi tạo cấu hình phụ huynh mặc định nếu chưa có
     parent = await env.DB.prepare(
-      `INSERT INTO parent (user_id, max_profiles, created_at, updated_at)
-       VALUES (?, 2, ?, ?)
+      `INSERT INTO parent (user_id, default_profile, max_profiles, created_at, updated_at)
+       VALUES (?, NULL, 2, ?, ?)
        RETURNING *`,
     )
       .bind(userId, now, now)
@@ -38,6 +38,7 @@ export async function handleGetParent(
     'SUCCESS',
     {
       user_id: userId,
+      default_profile: parent?.default_profile ?? null,
       max_profiles: parent?.max_profiles ?? 2,
       profiles_count: countRow?.count ?? 0,
       created_at: parent?.created_at ?? now,
@@ -45,6 +46,49 @@ export async function handleGetParent(
     },
     origin,
   );
+}
+
+export async function handleSetDefaultProfile(
+  request: Request,
+  userId: number,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as {
+    profile_id?: number | null;
+  } | null;
+
+  if (!body) {
+    return errorResponse(400, 'BAD_REQUEST', 'Dữ liệu không hợp lệ', origin);
+  }
+
+  const profileId = typeof body.profile_id === 'number' ? body.profile_id : null;
+  const now = Math.floor(Date.now() / 1000);
+
+  if (profileId !== null) {
+    // Kiểm tra profile có thuộc về user_id này không
+    const profile = await env.DB.prepare(
+      'SELECT id FROM english_kids_profile WHERE id = ? AND user_id = ?',
+    )
+      .bind(profileId, userId)
+      .first<{ id: number }>();
+
+    if (!profile) {
+      return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy hồ sơ người học', origin);
+    }
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO parent (user_id, default_profile, max_profiles, created_at, updated_at)
+     VALUES (?, ?, 2, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET
+       default_profile = excluded.default_profile,
+       updated_at = excluded.updated_at`,
+  )
+    .bind(userId, profileId, now, now)
+    .run();
+
+  return successResponse(200, 'SUCCESS', { default_profile: profileId }, origin);
 }
 
 // ── Profiles APIs ───────────────────────────────────────────────────────────
@@ -83,10 +127,10 @@ export async function handleCreateProfile(
 
   // 1. Kiểm tra giới hạn số lượng hồ sơ từ bảng parent
   const parent = await env.DB.prepare(
-    'SELECT max_profiles FROM parent WHERE user_id = ?',
+    'SELECT default_profile, max_profiles FROM parent WHERE user_id = ?',
   )
     .bind(userId)
-    .first<{ max_profiles: number }>();
+    .first<{ default_profile: number | null; max_profiles: number }>();
 
   const maxProfiles = parent?.max_profiles ?? 2;
 
@@ -121,6 +165,19 @@ export async function handleCreateProfile(
   )
     .bind(userId, name, avatar, birthYear, gender, position, now, now)
     .first<EnglishKidsProfile>();
+
+  // 3. Nếu chưa có default_profile, tự động gán hồ sơ đầu tiên này làm mặc định
+  if (insert && (!parent || parent.default_profile === null)) {
+    await env.DB.prepare(
+      `INSERT INTO parent (user_id, default_profile, max_profiles, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         default_profile = COALESCE(parent.default_profile, excluded.default_profile),
+         updated_at = excluded.updated_at`,
+    )
+      .bind(userId, insert.id, maxProfiles, now, now)
+      .run();
+  }
 
   return successResponse(201, 'CREATED', insert, origin);
 }
@@ -193,6 +250,23 @@ export async function handleDeleteProfile(
   if (!result.meta.changes) {
     return errorResponse(404, 'NOT_FOUND', undefined, origin);
   }
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // Nếu xóa trúng default_profile, cập nhật sang profile khác hoặc set NULL
+  const remaining = await env.DB.prepare(
+    'SELECT id FROM english_kids_profile WHERE user_id = ? ORDER BY position ASC, id ASC LIMIT 1',
+  )
+    .bind(userId)
+    .first<{ id: number }>();
+
+  await env.DB.prepare(
+    `UPDATE parent
+     SET default_profile = ?, updated_at = ?
+     WHERE user_id = ? AND default_profile = ?`,
+  )
+    .bind(remaining?.id ?? null, now, userId, profileId)
+    .run();
 
   return successResponse(200, 'DELETED', undefined, origin);
 }

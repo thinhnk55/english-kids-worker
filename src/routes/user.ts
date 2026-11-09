@@ -19,6 +19,7 @@ import {
   handleDeleteProfile,
   handleGetParent,
   handleListProfiles,
+  handleSetDefaultProfile,
   handleUpdateProfile,
 } from '../features/profile/handlers.ts';
 import { errorResponse } from '../utils/response.ts';
@@ -46,6 +47,11 @@ export async function routeUserRequest(
   // --- Parent ---
   if (pathname === '/v1/my/parent') {
     if (method === 'GET') return handleGetParent(userId, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  if (pathname === '/v1/my/parent/default-profile') {
+    if (method === 'PUT' || method === 'POST') return handleSetDefaultProfile(request, userId, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
