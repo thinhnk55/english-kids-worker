@@ -75,9 +75,9 @@ export async function handleStartSession(
   const session = await env.DB.prepare(
     `INSERT INTO ai_talk_sessions (
        user_id, profile_id, scenario_id, status, turns_count, max_turns,
-       completed_missions, score, messages, feedback, created_at, updated_at
+       completed_missions, score, focus_score, messages, feedback, created_at, updated_at
      )
-     VALUES (?, ?, ?, 'in_progress', 0, ?, '[]', 100, ?, NULL, ?, ?)
+     VALUES (?, ?, ?, 'in_progress', 0, ?, '[]', NULL, 100, ?, NULL, ?, ?)
      RETURNING *`,
   )
     .bind(
@@ -321,7 +321,7 @@ async function executeTurn(
   };
   const updatedMessages = [...existingMessages, userMsg];
 
-  const currentScore = typeof session.score === 'number' ? session.score : 100;
+  const currentFocusScore = typeof session.focus_score === 'number' ? session.focus_score : 100;
 
   const turnResult = await evaluateAndReplyAiTalk(env, {
     situation: scenario.situation,
@@ -333,7 +333,7 @@ async function executeTurn(
     messages: updatedMessages,
     turnsCount: session.turns_count,
     maxTurns: session.max_turns,
-    currentScore,
+    currentFocusScore,
   });
 
   // Attach per-message feedback directly to the user's message
@@ -346,35 +346,59 @@ async function executeTurn(
   };
   updatedMessages.push(assistantMsg);
 
+  // Focus Score (anti-derailment / session retention) calculation
   const penalty = turnResult.feedback?.relevance?.penalty ?? 0;
-  const newFocusScore = Math.max(0, currentScore + penalty);
+  const newFocusScore = Math.max(0, currentFocusScore + penalty);
 
   const newTurnsCount = session.turns_count + 1;
   const now = Math.floor(Date.now() / 1000);
 
-  let newStatus: AiTalkSession['status'] = 'in_progress';
-  let finalScore: number = newFocusScore;
-  let finalFeedback: string | null = session.feedback;
+  const isAllMissionsDone = turnResult.is_all_completed || (missionsList.length > 0 && turnResult.completed_missions.length >= missionsList.length);
+  const isFailedByFocus = newFocusScore <= 0;
+  const isTurnsExceeded = newTurnsCount >= session.max_turns;
 
-  if (turnResult.is_all_completed) {
+  let newStatus: AiTalkSession['status'] = 'in_progress';
+  let finalCompetencyScore: number | null = session.score;
+  let finalFeedbackPayload: string | null = session.feedback;
+
+  if (isAllMissionsDone) {
     newStatus = 'completed';
-    finalScore = newFocusScore;
-    finalFeedback = turnResult.feedback?.praise
-      ? `Xuất sắc! Đã hoàn thành mọi mục tiêu với Focus Score: ${newFocusScore}/100. ${turnResult.feedback.praise}`
-      : `Xuất sắc! Đã hoàn thành mọi mục tiêu với Focus Score: ${newFocusScore}/100.`;
-  } else if (newFocusScore <= 0) {
+    finalCompetencyScore = turnResult.performance_score ?? 85;
+    finalFeedbackPayload = JSON.stringify(turnResult.evaluation || {
+      performance_score: finalCompetencyScore,
+      overall: 'Xuất sắc! Bạn đã hoàn thành toàn bộ mục tiêu của bài học.',
+      strengths: ['Giao tiếp trôi chảy', 'Bám sát tình huống'],
+      improvements: ['Tiếp tục luyện tập thêm các cấu trúc câu nâng cao'],
+    });
+  } else if (isFailedByFocus) {
     newStatus = 'failed';
-    finalScore = 0;
-    finalFeedback = 'Nhiệm vụ thất bại do điểm tập trung (Focus Score) về 0 (lạc đề quá nhiều).';
-  } else if (newTurnsCount >= session.max_turns) {
+    finalCompetencyScore = turnResult.performance_score ?? 40;
+    finalFeedbackPayload = JSON.stringify({
+      performance_score: finalCompetencyScore,
+      overall: 'Phiên hội thoại dừng lại do điểm tập trung (Focus Score) về 0 (lạc đề quá nhiều). Hãy thử lại và tập trung vào mục tiêu của nhân vật.',
+      strengths: [],
+      improvements: ['Hãy bám sát tình huống và câu hỏi của nhân vật'],
+    });
+  } else if (isTurnsExceeded) {
     newStatus = 'failed';
-    finalScore = newFocusScore;
-    finalFeedback = `Đã đạt giới hạn ${session.max_turns} lượt thoại mà chưa hoàn thành toàn bộ mục tiêu.`;
+    finalCompetencyScore = turnResult.performance_score ?? 60;
+    finalFeedbackPayload = JSON.stringify(turnResult.evaluation || {
+      performance_score: finalCompetencyScore,
+      overall: `Đã kết thúc ${session.max_turns} lượt thoại mà chưa hoàn thành tất cả mục tiêu.`,
+      strengths: ['Đã cố gắng giao tiếp'],
+      improvements: ['Hãy phản hồi nhanh và đi thẳng vào mục tiêu cần đạt'],
+    });
+  } else {
+    // Progressive competency score estimate
+    finalCompetencyScore = turnResult.performance_score ?? session.score;
+    if (turnResult.evaluation) {
+      finalFeedbackPayload = JSON.stringify(turnResult.evaluation);
+    }
   }
 
   const updated = await env.DB.prepare(
     `UPDATE ai_talk_sessions
-     SET turns_count = ?, completed_missions = ?, status = ?, score = ?, messages = ?, feedback = ?, updated_at = ?
+     SET turns_count = ?, completed_missions = ?, status = ?, score = ?, focus_score = ?, messages = ?, feedback = ?, updated_at = ?
      WHERE id = ?
      RETURNING *`,
   )
@@ -382,11 +406,12 @@ async function executeTurn(
       newTurnsCount,
       JSON.stringify(turnResult.completed_missions),
       newStatus,
-      finalScore,
+      finalCompetencyScore,
+      newFocusScore,
       JSON.stringify(updatedMessages),
-      finalFeedback,
+      finalFeedbackPayload,
       now,
-      sessionId,
+      session.id,
     )
     .first<AiTalkSession>();
 
@@ -408,6 +433,9 @@ export function formatSession(session: AiTalkSession | null | undefined) {
     messages: typeof session.messages === 'string'
       ? safeJsonParse(session.messages, [])
       : session.messages,
+    feedback: typeof session.feedback === 'string'
+      ? safeJsonParse(session.feedback, session.feedback)
+      : session.feedback,
   };
 }
 

@@ -1,17 +1,26 @@
 import type { AiTalkMission, ChatMessage, ChatMessageFeedback } from '../types/ai-talk.ts';
 
+export interface SessionCompetencyEvaluation {
+  performance_score: number; // 0 - 100
+  overall: string;
+  strengths: string[];
+  improvements: string[];
+}
+
 export interface LlmTalkTurnResult {
   reply: string;
   completed_missions: string[];
   feedback: ChatMessageFeedback;
   is_all_completed: boolean;
-  score?: number;
+  performance_score: number;
+  evaluation?: SessionCompetencyEvaluation;
   debug_log?: {
     latency_ms: number;
     pending_before: string[];
     new_completed: string[];
     relevance_level: string;
     penalty: number;
+    focus_score_after: number;
   };
 }
 
@@ -27,7 +36,7 @@ export async function evaluateAndReplyAiTalk(
     messages: ChatMessage[];
     turnsCount: number;
     maxTurns: number;
-    currentScore?: number;
+    currentFocusScore: number;
   },
 ): Promise<LlmTalkTurnResult> {
   const internalKey = env.INTERNAL_API_KEY || '751791ddb95fcb30db0330b2ea7c9bc9f15c4eee3f5d8ab968449988b4ef0d7c';
@@ -51,52 +60,75 @@ export async function evaluateAndReplyAiTalk(
     ? params.previouslyCompletedMissions.join(', ')
     : 'None yet';
 
-  const systemInstructions = `You are a real-time English conversation partner and language coach for English learners.
+  const systemInstructions = `You are an expert English conversation partner and language assessor for English learners.
 
 SCENARIO CONTEXT:
 - Situation: ${params.situation}
 - Your Character Role: ${params.aiRole}
 - Learner's Character Role: ${params.userRole}
-- Guidance & Tone: ${params.aiPrompt}
+- Persona & Guidance: ${params.aiPrompt}
 
-ALL MISSIONS TO COMPLETE IN THIS SCENARIO:
+MISSIONS / LEARNING GOALS:
 ${missionsListStr}
 
 STATUS:
-- Already completed missions: [${completedListStr}]
-- PENDING MISSIONS TO FOCUS ON RIGHT NOW:
+- Completed missions: [${completedListStr}]
+- PENDING MISSIONS (Focus on guiding the learner to achieve these):
 ${pendingListStr}
 
-Turn count: ${params.turnsCount + 1} of ${params.maxTurns}. Current focus score: ${params.currentScore ?? 100}/100.
+Turn count: ${params.turnsCount + 1} of ${params.maxTurns}.
+Focus Score (Anti-derailment health bar): ${params.currentFocusScore}/100.
 
-YOUR 3 CONCURRENT OBJECTIVES FOR THIS TURN:
+IMPORTANT CONCEPTS:
+1. FOCUS SCORE (Chống lạc đề):
+   - A retention meter strictly to prevent off-topic rambling (100 -> 0).
+   - "on_topic": 0 penalty
+   - "slight_off_topic": -10 penalty
+   - "completely_off_topic": -25 penalty
+   - "intentional_off_topic": -35 penalty
+   - NOTE: Grammatical errors DO NOT reduce Focus Score! Only off-topic rambling reduces Focus Score.
+
+2. PERFORMANCE SCORE (Điểm đánh giá năng lực thực tế: 0 - 100):
+   - Comprehensive score reflecting actual English ability:
+     * Accuracy (40%): Correct grammar, sentence structure, suitable vocabulary.
+     * Naturalness & Fluency (30%): Natural phrasing, appropriateness.
+     * Task completion & Efficiency (30%): Achieving missions within reasonable turns.
+
+YOUR TASKS FOR THIS TURN:
 
 1. EVALUATE LEARNER'S LATEST MESSAGE ("${lastUserMessage}"):
    - Accuracy:
      * is_correct: true if grammar and vocabulary are acceptable for spoken English.
-     * issue: If there is a noticeable grammar, vocabulary, or word order mistake, describe it concisely (e.g. "Sai trật tự từ: nên nói large pizza thay vì pizza big").
-   - Relevance (Check topic & mission adherence):
-     * "on_topic": The learner talks about the scenario/order/missions. (penalty: 0, note: "Đúng chủ đề")
-     * "slight_off_topic": Pausing or asking small unrelated questions. (penalty: -10, note: "Hơi lạc đề")
-     * "completely_off_topic": Completely unrelated to the scenario or talking to the AI as a bot. (penalty: -25, note: "Lạc đề hoàn toàn")
-     * "intentional_off_topic": Deliberate and repeated derailment. (penalty: -35, note: "Cố tình lạc đề")
+     * issue: If there is a grammatical, vocabulary, or word order mistake, describe it concisely (e.g. "Nên dùng large pizza thay vì pizza big").
+   - Relevance (Anti-derailment check):
+     * "on_topic": Learner stays on the scenario. (penalty: 0, note: "Đúng chủ đề")
+     * "slight_off_topic": Slightly off or pausing. (penalty: -10, note: "Hơi lạc đề")
+     * "completely_off_topic": Unrelated or asking about AI identity. (penalty: -25, note: "Lạc đề hoàn toàn")
+     * "intentional_off_topic": Deliberate derailing. (penalty: -35, note: "Cố tình lạc đề")
    - Naturalness:
-     * suggestion: How would a native English speaker say this more naturally? Give a natural phrasing (e.g. "I'd like a large pizza, please."). Only omit if the user's sentence was already very natural.
+     * suggestion: How a native speaker would say this more naturally in this context (e.g. "I'd like a large pizza, please.").
    - Praise:
-     * A brief word of encouragement (e.g. "Good effort!", "Nice expression!", "Great choice!").
+     * A brief encouraging comment (e.g. "Great choice!", "Good order!").
 
 2. CHECK MISSION ADVANCEMENT:
-   - Check if the learner's latest message satisfies any of the PENDING missions.
-   - If satisfied (even in simple/imperfect words), add its mission ID to "completed_missions".
-   - Return the cumulative list of ALL completed mission IDs (both previous and any newly completed).
+   - Check if the learner satisfied any PENDING missions.
+   - If satisfied, include its mission ID in "completed_missions".
+   - Return ALL completed mission IDs (both previous and new).
    - "is_all_completed": true if all ${allMissions.length} missions in the scenario are now done.
 
 3. GENERATE IN-CHARACTER REPLY:
-   - Stay 100% in character as "${params.aiRole}".
-   - Keep it concise: 1 to 2 short, natural sentences in simple English.
-   - If the learner is OFF-TOPIC: Respond briefly in character and politely steer them back to the scenario (e.g. "Haha, but I'm your pizza cashier! What pizza would you like to order?").
-   - If the learner is ON-TOPIC: React naturally to what they said, and proactively prompt them towards the NEXT pending mission!
-   - If ALL missions are completed: Confirm their complete order/task and conclude with a warm closing.
+   - Speak 100% in character as "${params.aiRole}".
+   - Keep it short: 1 to 2 natural sentences in simple English.
+   - If learner is OFF-TOPIC: Politely redirect them back to the scenario.
+   - If learner is ON-TOPIC: Respond naturally and ask a question to prompt the NEXT pending mission!
+   - If ALL missions are finished: Conclude with a warm wrap-up and thank the customer/learner.
+
+4. OVERALL COMPETENCY EVALUATION:
+   - Provide "performance_score" (0 - 100) reflecting their actual English performance so far.
+   - Provide "evaluation":
+     * "overall": 1-2 sentences summarizing their English performance.
+     * "strengths": 1-2 key strengths observed (e.g. "Phản xạ nhanh", "Dùng từ vựng đúng").
+     * "improvements": 1-2 points to improve (e.g. "Cần chú ý trật tự tính từ trước danh từ").
 
 OUTPUT FORMAT: Strict JSON matching this schema:
 {
@@ -108,7 +140,13 @@ OUTPUT FORMAT: Strict JSON matching this schema:
     "naturalness": { "suggestion": "string or null" },
     "praise": "string"
   },
-  "is_all_completed": boolean
+  "is_all_completed": boolean,
+  "performance_score": number,
+  "evaluation": {
+    "overall": "string",
+    "strengths": ["string"],
+    "improvements": ["string"]
+  }
 }`;
 
   const conversationHistory = params.messages.map(msg => ({
@@ -141,7 +179,7 @@ OUTPUT FORMAT: Strict JSON matching this schema:
     if (!response.ok) {
       const errText = await response.text();
       console.error('[AI-TALK-LLM-ERROR] Status:', response.status, errText);
-      return fallbackResult(params.previouslyCompletedMissions, latencyMs);
+      return fallbackResult(params.previouslyCompletedMissions, params.currentFocusScore, latencyMs);
     }
 
     const json = await response.json() as {
@@ -151,7 +189,7 @@ OUTPUT FORMAT: Strict JSON matching this schema:
     const content = json.choices?.[0]?.message?.content?.trim();
     if (!content) {
       console.warn('[AI-TALK-LLM-EMPTY] No content returned from LLM');
-      return fallbackResult(params.previouslyCompletedMissions, latencyMs);
+      return fallbackResult(params.previouslyCompletedMissions, params.currentFocusScore, latencyMs);
     }
 
     const parsed = JSON.parse(content) as {
@@ -159,6 +197,8 @@ OUTPUT FORMAT: Strict JSON matching this schema:
       completed_missions?: string[];
       feedback?: ChatMessageFeedback;
       is_all_completed?: boolean;
+      performance_score?: number;
+      evaluation?: SessionCompetencyEvaluation;
     };
 
     const completedMissions = Array.isArray(parsed.completed_missions)
@@ -184,6 +224,23 @@ OUTPUT FORMAT: Strict JSON matching this schema:
     };
 
     const newlyDone = completedMissions.filter(id => !completedSet.has(id));
+    const penalty = feedback.relevance?.penalty ?? 0;
+    const focusScoreAfter = Math.max(0, params.currentFocusScore + penalty);
+
+    const performanceScore = typeof parsed.performance_score === 'number'
+      ? Math.min(100, Math.max(0, parsed.performance_score))
+      : 80;
+
+    const evaluation: SessionCompetencyEvaluation = {
+      performance_score: performanceScore,
+      overall: parsed.evaluation?.overall || 'Bạn đã tham gia hội thoại tích cực và hoàn thành các lượt đối thoại.',
+      strengths: Array.isArray(parsed.evaluation?.strengths) && parsed.evaluation.strengths.length > 0
+        ? parsed.evaluation.strengths
+        : ['Nắm được nội dung tình huống', 'Phản hồi tự tin'],
+      improvements: Array.isArray(parsed.evaluation?.improvements) && parsed.evaluation.improvements.length > 0
+        ? parsed.evaluation.improvements
+        : ['Chú ý các mẫu câu giao tiếp tự nhiên hơn'],
+    };
 
     // Structured Server Logging
     console.log('[AI-TALK-TURN-LOG]', JSON.stringify({
@@ -192,6 +249,8 @@ OUTPUT FORMAT: Strict JSON matching this schema:
       learnerInput: lastUserMessage,
       relevance: feedback.relevance,
       accuracy: feedback.accuracy,
+      focusScore: `${params.currentFocusScore} -> ${focusScoreAfter}`,
+      performanceScore,
       newlyCompletedMissions: newlyDone,
       allCompletedMissions: completedMissions,
       aiReply: parsed.reply,
@@ -202,23 +261,25 @@ OUTPUT FORMAT: Strict JSON matching this schema:
       completed_missions: completedMissions,
       feedback,
       is_all_completed: Boolean(parsed.is_all_completed) || (allMissions.length > 0 && completedMissions.length >= allMissions.length),
-      score: undefined,
+      performance_score: performanceScore,
+      evaluation,
       debug_log: {
         latency_ms: latencyMs,
         pending_before: pendingMissions.map(m => m.id),
         new_completed: newlyDone,
         relevance_level: feedback.relevance?.level || 'on_topic',
-        penalty: feedback.relevance?.penalty || 0,
+        penalty,
+        focus_score_after: focusScoreAfter,
       },
     };
   } catch (error) {
     const latencyMs = Date.now() - startTime;
     console.error('[AI-TALK-EXCEPTION] Error during evaluateAndReplyAiTalk:', error);
-    return fallbackResult(params.previouslyCompletedMissions, latencyMs);
+    return fallbackResult(params.previouslyCompletedMissions, params.currentFocusScore, latencyMs);
   }
 }
 
-function fallbackResult(previouslyCompleted: string[], latencyMs = 0): LlmTalkTurnResult {
+function fallbackResult(previouslyCompleted: string[], currentFocus: number, latencyMs = 0): LlmTalkTurnResult {
   return {
     reply: "I understand! Let's continue with our conversation.",
     completed_missions: previouslyCompleted,
@@ -228,13 +289,20 @@ function fallbackResult(previouslyCompleted: string[], latencyMs = 0): LlmTalkTu
       praise: "Cố gắng rất tốt!",
     },
     is_all_completed: false,
-    score: 80,
+    performance_score: 75,
+    evaluation: {
+      performance_score: 75,
+      overall: 'Hoàn thành lượt thoại với tinh thần giao tiếp tích cực.',
+      strengths: ['Tự tin phản hồi'],
+      improvements: ['Tiếp tục luyện tập để tăng độ lưu loát'],
+    },
     debug_log: {
       latency_ms: latencyMs,
       pending_before: [],
       new_completed: [],
       relevance_level: 'on_topic',
       penalty: 0,
+      focus_score_after: currentFocus,
     },
   };
 }
