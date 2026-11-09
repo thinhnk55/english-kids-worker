@@ -1,11 +1,10 @@
+import { handleListScenarios } from '../features/ai-talk/scenario/handlers.ts';
 import {
   handleGetSession,
   handleListProfileSessions,
   handleSessionLlmChat,
   handleSessionMessage,
-  handleSessionVoiceMessage,
   handleStartSession,
-  handleSynthesizeGeneralText,
   handleUpdateSession,
 } from '../features/ai-talk/session/user.ts';
 import { handleGetMyCredits } from '../features/credit/handlers.ts';
@@ -52,15 +51,15 @@ export async function routeUserRequest(
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
-  // --- LLM Chat Completion (Client quyết định prompt, BE khóa cứng 500 max_tokens) ---
-  if (pathname === '/v1/my/ai-talk/chat' || pathname === '/v1/ai-talk/chat') {
-    if (method === 'POST') return handleSessionLlmChat(request, env, origin);
+  // --- Scenarios (Client lấy danh sách kịch bản gọn từ BE) ---
+  if (pathname === '/v1/my/ai-talk/scenarios' || pathname === '/v1/ai-talk/scenarios') {
+    if (method === 'GET') return handleListScenarios(request, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
-  // --- TTS độc lập cho bé nghe phát âm bất kỳ câu nào ---
-  if (pathname === '/v1/my/ai-talk/tts' || pathname === '/v1/ai-talk/tts') {
-    if (method === 'POST') return handleSynthesizeGeneralText(request, env, origin);
+  // --- LLM Chat Completion (Client quyết định prompt, BE khóa cứng 500 max_tokens) ---
+  if (pathname === '/v1/my/ai-talk/chat' || pathname === '/v1/ai-talk/chat') {
+    if (method === 'POST') return handleSessionLlmChat(request, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
@@ -68,20 +67,6 @@ export async function routeUserRequest(
   if (pathname === '/v1/my/ai-talk/sessions' || pathname === '/v1/ai-talk/sessions' || pathname === '/v1/ai-talk/sessions/start' || pathname === '/v1/my/ai-talk/sessions/start') {
     if (method === 'GET') return handleListProfileSessions(request, userId, env, origin);
     if (method === 'POST') return handleStartSession(request, userId, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  // Gửi giọng nói (STT)
-  const voiceMessageMatch = pathname.match(/^\/v1\/(?:my\/)?ai-talk\/sessions\/(\d+)\/messages\/voice$/);
-  if (voiceMessageMatch) {
-    if (method === 'POST') return handleSessionVoiceMessage(request, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  // TTS cho câu nói trong phiên
-  const sessionTtsMatch = pathname.match(/^\/v1\/(?:my\/)?ai-talk\/sessions\/(\d+)\/tts$/);
-  if (sessionTtsMatch) {
-    if (method === 'POST') return handleSynthesizeGeneralText(request, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 

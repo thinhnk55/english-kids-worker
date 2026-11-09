@@ -1,8 +1,6 @@
 import { deductUserCredit } from '../../credit/handlers.ts';
 import { callLlmCompletion } from '../../../services/llm.ts';
-import { transcribeAudio } from '../../../services/stt.ts';
-import { synthesizeSpeech } from '../../../services/tts.ts';
-import type { AiTalkSession, ChatMessage } from '../../../types/ai-talk.ts';
+import type { AiTalkScenarioRow, AiTalkSession, ChatMessage } from '../../../types/ai-talk.ts';
 import { safeJsonParse } from '../../../utils/json.ts';
 import { errorResponse, successResponse } from '../../../utils/response.ts';
 
@@ -14,32 +12,45 @@ export async function handleStartSession(
 ): Promise<Response> {
   const body = await request.json().catch(() => null) as {
     scenario_id?: string;
+    scenario_code?: string;
+    code?: string;
     profile_id?: number;
     max_turns?: number;
     initial_messages?: ChatMessage[];
     first_message?: string;
   } | null;
 
-  if (!body || !body.scenario_id || typeof body.scenario_id !== 'string') {
+  const scenarioCode = body?.scenario_id || body?.scenario_code || body?.code;
+  if (!scenarioCode || typeof scenarioCode !== 'string') {
     return errorResponse(400, 'VALIDATION_ERROR', 'Mã kịch bản (scenario_id) là bắt buộc', origin);
   }
 
-  // 1. Kiểm tra và trừ 1 credit của tài khoản
-  const scenarioId = body.scenario_id.trim();
-  const creditDeduction = await deductUserCredit(env, userId, 1, 'start_ai_talk_session', scenarioId);
+  const cleanCode = scenarioCode.trim();
+
+  // Tra cứu thông tin scenario từ bảng ai_talk_scenarios
+  const scenarioRow = await env.DB.prepare(
+    'SELECT code, name, category, credit_cost, max_turns FROM ai_talk_scenarios WHERE code = ?',
+  )
+    .bind(cleanCode)
+    .first<AiTalkScenarioRow>();
+
+  const creditCost = scenarioRow?.credit_cost ?? 1;
+  const maxTurns = scenarioRow?.max_turns ?? (Math.min(Math.max(Number(body?.max_turns) || 10, 1), 25));
+
+  // Kiểm tra và trừ credit theo cấu hình của scenario
+  const creditDeduction = await deductUserCredit(env, userId, creditCost, 'start_ai_talk_session', cleanCode);
   if (!creditDeduction.success) {
-    return errorResponse(402, 'PAYMENT_REQUIRED', 'Tài khoản đã hết lượt rèn luyện (credit). Vui lòng nạp thêm credit để tiếp tục!', origin);
+    return errorResponse(402, 'PAYMENT_REQUIRED', `Tài khoản cần tối thiểu ${creditCost} credit để luyện tập kịch bản này!`, origin);
   }
 
-  const profileId = typeof body.profile_id === 'number' ? body.profile_id : null;
-  const maxTurns = Math.min(Math.max(Number(body.max_turns) || 10, 1), 25);
+  const profileId = typeof body?.profile_id === 'number' ? body.profile_id : null;
   const now = Math.floor(Date.now() / 1000);
 
-  // Client quyết định nội dung tin nhắn khởi tạo
+  // Client quyết định tin nhắn khởi tạo
   let initialMessages: ChatMessage[] = [];
-  if (Array.isArray(body.initial_messages) && body.initial_messages.length > 0) {
+  if (Array.isArray(body?.initial_messages) && body.initial_messages.length > 0) {
     initialMessages = body.initial_messages;
-  } else if (body.first_message) {
+  } else if (body?.first_message) {
     initialMessages = [
       {
         role: 'assistant',
@@ -60,7 +71,7 @@ export async function handleStartSession(
     .bind(
       userId,
       profileId,
-      scenarioId,
+      cleanCode,
       maxTurns,
       JSON.stringify(initialMessages),
       now,
@@ -124,7 +135,7 @@ export async function handleListProfileSessions(
   return successResponse(200, 'SUCCESS', list, origin);
 }
 
-// Client gửi nội dung 1 lượt (turn) lên BE để lưu và BE kiểm tra chặn số turn tối đa
+// Client gửi nội dung 1 lượt (turn) lên BE: BE kiểm tra chặn số turn tối đa
 export async function handleSessionMessage(
   request: Request,
   sessionId: number,
@@ -306,7 +317,7 @@ export async function handleSessionLlmChat(
       prompt: body.prompt,
       messages: body.messages,
       temperature: body.temperature ?? 0.5,
-      max_tokens: Math.min(body.max_tokens || 500, 500), // Khóa cứng max 500 tokens chống spam
+      max_tokens: Math.min(body.max_tokens || 500, 500),
       response_format: body.response_format,
     });
     return successResponse(200, 'SUCCESS', res, origin);
@@ -314,41 +325,6 @@ export async function handleSessionLlmChat(
     console.error('[AI-TALK-LLM-ERROR]', err);
     return errorResponse(500, 'INTERNAL_ERROR', err?.message || 'Lỗi gọi LLM', origin);
   }
-}
-
-// Xử lý gửi giọng nói (STT)
-export async function handleSessionVoiceMessage(
-  request: Request,
-  env: Env,
-  origin: string,
-): Promise<Response> {
-  const sttRes = await transcribeAudio(request, env);
-  if (!sttRes.ok || !sttRes.text) {
-    return errorResponse(400, 'VALIDATION_ERROR', sttRes.error || 'Không nhận diện được giọng nói', origin);
-  }
-  return successResponse(200, 'SUCCESS', { text: sttRes.text }, origin);
-}
-
-// Chuyển đổi văn bản tự do thành audio TTS
-export async function handleSynthesizeGeneralText(
-  request: Request,
-  env: Env,
-  origin: string,
-): Promise<Response> {
-  const body = await request.json().catch(() => null) as {
-    text?: string;
-    voice?: string;
-    speed?: number;
-  } | null;
-
-  if (!body || !body.text || typeof body.text !== 'string' || !body.text.trim()) {
-    return errorResponse(400, 'VALIDATION_ERROR', 'Nội dung text không được để trống', origin);
-  }
-
-  return await synthesizeSpeech(env, body.text.trim(), {
-    voice: body.voice || 'alloy',
-    speed: body.speed || 1.0,
-  }, origin);
 }
 
 export function formatSession(session: AiTalkSession | null | undefined) {

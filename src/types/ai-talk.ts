@@ -1,29 +1,11 @@
-export interface AiTalkCategory {
+export interface AiTalkScenarioRow {
   code: string;
-  parent_code: string | null;
   name: string;
-  position: number;
-}
-
-export interface AiTalkMission {
-  id?: string;
-  code?: string;
-  goal?: string;
-  text?: string;
-  hints?: string[];
-}
-
-export interface AiTalkScenario {
-  id: string;
-  category?: string | null;
-  title: string;
-  situation: string;
-  missions: string | AiTalkMission[];
-  ai_role: string;
-  user_role: string;
-  ai_prompt: string;
-  first_message: string;
+  category: string;
+  credit_cost: number;
   max_turns: number;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface ChatMessageFeedback {
