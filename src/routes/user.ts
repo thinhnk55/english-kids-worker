@@ -19,9 +19,7 @@ import {
   handleDeleteProfile,
   handleGetParent,
   handleListProfiles,
-  handleSetParentPasscode,
   handleUpdateProfile,
-  handleVerifyParentPasscode,
 } from '../features/profile/handlers.ts';
 import { errorResponse } from '../utils/response.ts';
 
@@ -45,19 +43,9 @@ export async function routeUserRequest(
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
-  // --- Parent & Passcode ---
+  // --- Parent ---
   if (pathname === '/v1/my/parent') {
     if (method === 'GET') return handleGetParent(userId, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  if (pathname === '/v1/my/parent/passcode') {
-    if (method === 'POST' || method === 'PUT') return handleSetParentPasscode(request, userId, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  if (pathname === '/v1/my/parent/verify-passcode') {
-    if (method === 'POST') return handleVerifyParentPasscode(request, userId, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 

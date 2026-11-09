@@ -19,8 +19,8 @@ export async function handleGetParent(
   if (!parent) {
     // Tự động khởi tạo cấu hình phụ huynh mặc định nếu chưa có
     parent = await env.DB.prepare(
-      `INSERT INTO parent (user_id, pass_code, max_profiles, created_at, updated_at)
-       VALUES (?, NULL, 2, ?, ?)
+      `INSERT INTO parent (user_id, max_profiles, created_at, updated_at)
+       VALUES (?, 2, ?, ?)
        RETURNING *`,
     )
       .bind(userId, now, now)
@@ -38,7 +38,6 @@ export async function handleGetParent(
     'SUCCESS',
     {
       user_id: userId,
-      has_pass_code: Boolean(parent?.pass_code && parent.pass_code.trim().length > 0),
       max_profiles: parent?.max_profiles ?? 2,
       profiles_count: countRow?.count ?? 0,
       created_at: parent?.created_at ?? now,
@@ -46,74 +45,6 @@ export async function handleGetParent(
     },
     origin,
   );
-}
-
-export async function handleSetParentPasscode(
-  request: Request,
-  userId: number,
-  env: Env,
-  origin: string,
-): Promise<Response> {
-  const body = (await request.json().catch(() => null)) as {
-    pass_code?: string | null;
-  } | null;
-
-  if (!body) {
-    return errorResponse(400, 'BAD_REQUEST', 'Dữ liệu không hợp lệ', origin);
-  }
-
-  const passCode = body.pass_code?.trim() || null;
-  const now = Math.floor(Date.now() / 1000);
-
-  await env.DB.prepare(
-    `INSERT INTO parent (user_id, pass_code, max_profiles, created_at, updated_at)
-     VALUES (?, ?, 2, ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET
-       pass_code = excluded.pass_code,
-       updated_at = excluded.updated_at`,
-  )
-    .bind(userId, passCode, now, now)
-    .run();
-
-  return successResponse(
-    200,
-    'SUCCESS',
-    { has_pass_code: Boolean(passCode && passCode.length > 0) },
-    origin,
-  );
-}
-
-export async function handleVerifyParentPasscode(
-  request: Request,
-  userId: number,
-  env: Env,
-  origin: string,
-): Promise<Response> {
-  const body = (await request.json().catch(() => null)) as {
-    pass_code?: string;
-  } | null;
-
-  if (!body || typeof body.pass_code !== 'string') {
-    return errorResponse(400, 'VALIDATION_ERROR', 'Mã pass code không được để trống', origin);
-  }
-
-  const parent = await env.DB.prepare(
-    'SELECT pass_code FROM parent WHERE user_id = ?',
-  )
-    .bind(userId)
-    .first<{ pass_code: string | null }>();
-
-  // Nếu phụ huynh chưa thiết lập pass code thì mặc định xác nhận thành công
-  if (!parent || !parent.pass_code) {
-    return successResponse(200, 'SUCCESS', { valid: true, unconfigured: true }, origin);
-  }
-
-  const valid = parent.pass_code.trim() === body.pass_code.trim();
-  if (!valid) {
-    return errorResponse(401, 'INVALID_PASSCODE', 'Mã pass code không chính xác', origin);
-  }
-
-  return successResponse(200, 'SUCCESS', { valid: true }, origin);
 }
 
 // ── Profiles APIs ───────────────────────────────────────────────────────────
