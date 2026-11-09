@@ -29,7 +29,7 @@ export interface ChatMessageFeedback {
     points: number;
     detail?: string;
   }>;
-  focus_penalty?: number;
+  energy_deduction?: number;
   praise?: string;
 }
 
@@ -40,19 +40,30 @@ export interface ChatMessage {
   feedback?: ChatMessageFeedback;
 }
 
+export interface SessionMeta {
+  messages?: ChatMessage[];
+  completed_missions?: string[];
+  feedback?: any;
+  [key: string]: any;
+}
+
 export interface AiTalkSession {
   id: number;
   user_id: number;
   profile_id: number | null;
   scenario_id: string;
   status: 'in_progress' | 'completed' | 'failed' | 'abandoned';
-  turns_count: number;
-  max_turns: number;
-  completed_missions: string | string[];
+  turn: number;
+  max_turn: number;
+  energy: number | null;
   score: number | null;
-  focus_score: number | null;
-  messages: string | ChatMessage[];
-  feedback: string | null;
+  meta: string | SessionMeta | null;
   created_at: number;
   updated_at: number;
+  // Aliases for compatibility with client
+  turns_count?: number;
+  max_turns?: number;
+  messages?: ChatMessage[];
+  completed_missions?: string[];
+  feedback?: any;
 }

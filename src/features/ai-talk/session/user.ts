@@ -1,6 +1,6 @@
 import { deductUserCredit } from '../../credit/handlers.ts';
 import { callLlmCompletion } from '../../../services/llm.ts';
-import type { AiTalkScenarioRow, AiTalkSession, ChatMessage } from '../../../types/ai-talk.ts';
+import type { AiTalkScenarioRow, AiTalkSession, ChatMessage, SessionMeta } from '../../../types/ai-talk.ts';
 import { safeJsonParse } from '../../../utils/json.ts';
 import { errorResponse, successResponse } from '../../../utils/response.ts';
 
@@ -16,8 +16,11 @@ export async function handleStartSession(
     code?: string;
     profile_id?: number;
     max_turns?: number;
+    max_turn?: number;
+    energy?: number;
     initial_messages?: ChatMessage[];
     first_message?: string;
+    meta?: Record<string, any>;
   } | null;
 
   const scenarioCode = body?.scenario_id || body?.scenario_code || body?.code;
@@ -35,7 +38,7 @@ export async function handleStartSession(
     .first<AiTalkScenarioRow>();
 
   const creditCost = scenarioRow?.credit_cost ?? 1;
-  const maxTurns = scenarioRow?.max_turns ?? (Math.min(Math.max(Number(body?.max_turns) || 10, 1), 25));
+  const maxTurn = scenarioRow?.max_turns ?? (Math.min(Math.max(Number(body?.max_turns || body?.max_turn) || 10, 1), 25));
 
   // Kiểm tra và trừ credit theo cấu hình của scenario
   const creditDeduction = await deductUserCredit(env, userId, creditCost, 'start_ai_talk_session', cleanCode);
@@ -44,6 +47,7 @@ export async function handleStartSession(
   }
 
   const profileId = typeof body?.profile_id === 'number' ? body.profile_id : null;
+  const initialEnergy = typeof body?.energy === 'number' ? body.energy : 3;
   const now = Math.floor(Date.now() / 1000);
 
   // Client quyết định tin nhắn khởi tạo
@@ -60,20 +64,28 @@ export async function handleStartSession(
     ];
   }
 
+  const sessionMeta: SessionMeta = {
+    messages: initialMessages,
+    completed_missions: [],
+    feedback: null,
+    ...(body?.meta || {}),
+  };
+
   const session = await env.DB.prepare(
     `INSERT INTO ai_talk_sessions (
-       user_id, profile_id, scenario_id, status, turns_count, max_turns,
-       completed_missions, score, focus_score, messages, feedback, created_at, updated_at
+       user_id, profile_id, scenario_id, status, turn, max_turn,
+       energy, score, meta, created_at, updated_at
      )
-     VALUES (?, ?, ?, 'in_progress', 0, ?, '[]', 100, 100, ?, NULL, ?, ?)
+     VALUES (?, ?, ?, 'in_progress', 0, ?, ?, 100, ?, ?, ?)
      RETURNING *`,
   )
     .bind(
       userId,
       profileId,
       cleanCode,
-      maxTurns,
-      JSON.stringify(initialMessages),
+      maxTurn,
+      initialEnergy,
+      JSON.stringify(sessionMeta),
       now,
       now,
     )
@@ -150,10 +162,11 @@ export async function handleSessionMessage(
     content?: string;
     message?: string;
     score?: number;
-    focus_score?: number;
+    energy?: number;
     completed_missions?: string[];
     feedback?: any;
     status?: AiTalkSession['status'];
+    meta?: Record<string, any>;
   } | null;
 
   if (!body) {
@@ -175,19 +188,21 @@ export async function handleSessionMessage(
   }
 
   // BE kiểm tra chặn số turn tối đa mà client được phép gửi lên
-  if (session.turns_count >= session.max_turns) {
+  if (session.turn >= session.max_turn) {
     await env.DB.prepare(
       "UPDATE ai_talk_sessions SET status = 'failed', updated_at = ? WHERE id = ?",
     )
       .bind(Math.floor(Date.now() / 1000), sessionId)
       .run();
-    return errorResponse(400, 'TURN_LIMIT_EXCEEDED', `Đã đạt giới hạn số lượt (${session.max_turns}) của phiên`, origin);
+    return errorResponse(400, 'TURN_LIMIT_EXCEEDED', `Đã đạt giới hạn số lượt (${session.max_turn}) của phiên`, origin);
   }
 
-  // Client quyết định toàn bộ nội dung lưu trữ
-  const existingMessages: ChatMessage[] = typeof session.messages === 'string'
-    ? safeJsonParse(session.messages, [])
-    : session.messages;
+  // Parse meta hiện tại
+  const meta: SessionMeta = typeof session.meta === 'string'
+    ? safeJsonParse(session.meta, {})
+    : (session.meta || {});
+
+  const existingMessages: ChatMessage[] = Array.isArray(meta.messages) ? meta.messages : [];
 
   let newMessages: ChatMessage[] = [];
   if (Array.isArray(body.messages)) {
@@ -205,38 +220,43 @@ export async function handleSessionMessage(
     if (body.assistant_message) newMessages.push(body.assistant_message);
   }
 
-  const newTurnsCount = session.turns_count + 1;
+  const newTurn = session.turn + 1;
   const now = Math.floor(Date.now() / 1000);
 
   const newScore = typeof body.score === 'number' ? body.score : session.score;
-  const newFocusScore = typeof body.focus_score === 'number' ? body.focus_score : session.focus_score;
-  const newCompletedMissions = Array.isArray(body.completed_missions)
-    ? body.completed_missions
-    : (typeof session.completed_missions === 'string' ? safeJsonParse(session.completed_missions, []) : session.completed_missions);
+  const newEnergy = typeof body.energy === 'number' ? body.energy : session.energy;
 
   let newStatus: AiTalkSession['status'] = body.status || 'in_progress';
-  if (newStatus === 'in_progress' && newTurnsCount >= session.max_turns) {
+  if (newEnergy !== null && newEnergy <= 0) {
+    newStatus = 'failed';
+  } else if (newStatus === 'in_progress' && newTurn >= session.max_turn) {
     newStatus = 'completed';
   }
 
-  const newFeedback = body.feedback !== undefined
-    ? (typeof body.feedback === 'string' ? body.feedback : JSON.stringify(body.feedback))
-    : session.feedback;
+  // Cập nhật meta
+  meta.messages = newMessages;
+  if (Array.isArray(body.completed_missions)) {
+    meta.completed_missions = body.completed_missions;
+  }
+  if (body.feedback !== undefined) {
+    meta.feedback = body.feedback;
+  }
+  if (body.meta && typeof body.meta === 'object') {
+    Object.assign(meta, body.meta);
+  }
 
   const updated = await env.DB.prepare(
     `UPDATE ai_talk_sessions
-     SET turns_count = ?, completed_missions = ?, status = ?, score = ?, focus_score = ?, messages = ?, feedback = ?, updated_at = ?
+     SET turn = ?, score = ?, energy = ?, status = ?, meta = ?, updated_at = ?
      WHERE id = ?
      RETURNING *`,
   )
     .bind(
-      newTurnsCount,
-      JSON.stringify(newCompletedMissions),
-      newStatus,
+      newTurn,
       newScore,
-      newFocusScore,
-      JSON.stringify(newMessages),
-      newFeedback,
+      newEnergy,
+      newStatus,
+      JSON.stringify(meta),
       now,
       session.id,
     )
@@ -256,9 +276,10 @@ export async function handleUpdateSession(
   const body = await request.json().catch(() => null) as {
     status?: AiTalkSession['status'];
     score?: number;
-    focus_score?: number;
+    energy?: number;
     feedback?: any;
     completed_missions?: string[];
+    meta?: Record<string, any>;
   } | null;
 
   const session = await env.DB.prepare(
@@ -274,21 +295,29 @@ export async function handleUpdateSession(
   const now = Math.floor(Date.now() / 1000);
   const status = body?.status || session.status;
   const score = typeof body?.score === 'number' ? body.score : session.score;
-  const focusScore = typeof body?.focus_score === 'number' ? body.focus_score : session.focus_score;
-  const feedback = body?.feedback !== undefined
-    ? (typeof body.feedback === 'string' ? body.feedback : JSON.stringify(body.feedback))
-    : session.feedback;
-  const completedMissions = Array.isArray(body?.completed_missions)
-    ? JSON.stringify(body.completed_missions)
-    : session.completed_missions;
+  const energy = typeof body?.energy === 'number' ? body.energy : session.energy;
+
+  const meta: SessionMeta = typeof session.meta === 'string'
+    ? safeJsonParse(session.meta, {})
+    : (session.meta || {});
+
+  if (Array.isArray(body?.completed_missions)) {
+    meta.completed_missions = body.completed_missions;
+  }
+  if (body?.feedback !== undefined) {
+    meta.feedback = body.feedback;
+  }
+  if (body?.meta && typeof body.meta === 'object') {
+    Object.assign(meta, body.meta);
+  }
 
   const updated = await env.DB.prepare(
     `UPDATE ai_talk_sessions
-     SET status = ?, score = ?, focus_score = ?, feedback = ?, completed_missions = ?, updated_at = ?
+     SET status = ?, score = ?, energy = ?, meta = ?, updated_at = ?
      WHERE id = ?
      RETURNING *`,
   )
-    .bind(status, score, focusScore, feedback, completedMissions, now, sessionId)
+    .bind(status, score, energy, JSON.stringify(meta), now, sessionId)
     .first<AiTalkSession>();
 
   return successResponse(200, 'SUCCESS', formatSession(updated), origin);
@@ -329,16 +358,21 @@ export async function handleSessionLlmChat(
 
 export function formatSession(session: AiTalkSession | null | undefined) {
   if (!session) return null;
+  const meta: SessionMeta = typeof session.meta === 'string'
+    ? safeJsonParse(session.meta, {})
+    : (session.meta || {});
+
   return {
     ...session,
-    completed_missions: typeof session.completed_missions === 'string'
-      ? safeJsonParse(session.completed_missions, [])
-      : session.completed_missions,
-    messages: typeof session.messages === 'string'
-      ? safeJsonParse(session.messages, [])
-      : session.messages,
-    feedback: typeof session.feedback === 'string'
-      ? safeJsonParse(session.feedback, session.feedback)
-      : session.feedback,
+    turn: session.turn,
+    turns_count: session.turn,
+    max_turn: session.max_turn,
+    max_turns: session.max_turn,
+    energy: session.energy,
+    score: session.score,
+    meta,
+    messages: Array.isArray(meta.messages) ? meta.messages : [],
+    completed_missions: Array.isArray(meta.completed_missions) ? meta.completed_missions : [],
+    feedback: meta.feedback ?? null,
   };
 }
