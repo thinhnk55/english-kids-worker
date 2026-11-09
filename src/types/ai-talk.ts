@@ -6,13 +6,16 @@ export interface AiTalkCategory {
 }
 
 export interface AiTalkMission {
-  code: string;
-  text: string;
+  id?: string;
+  code?: string;
+  goal?: string;
+  text?: string;
+  hints?: string[];
 }
 
 export interface AiTalkScenario {
   id: string;
-  category: string | null;
+  category?: string | null;
   title: string;
   situation: string;
   missions: string | AiTalkMission[];
@@ -77,11 +80,13 @@ export interface AiTalkSession {
   user_id: number;
   profile_id: number | null;
   scenario_id: string;
+  scenario_snapshot?: string | null;
   status: 'in_progress' | 'completed' | 'failed' | 'abandoned';
   turns_count: number;
   max_turns: number;
   completed_missions: string | string[];
   score: number | null;
+  focus_score: number | null;
   messages: string | ChatMessage[];
   feedback: string | null;
   created_at: number;

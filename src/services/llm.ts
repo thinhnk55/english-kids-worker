@@ -25,6 +25,14 @@ export interface LlmTalkTurnResult {
   };
 }
 
+function getMissionId(m: AiTalkMission): string {
+  return m.id || m.code || '';
+}
+
+function getMissionGoal(m: AiTalkMission): string {
+  return m.goal || m.text || '';
+}
+
 export async function evaluateAndReplyAiTalk(
   env: Env,
   params: {
@@ -46,16 +54,16 @@ export async function evaluateAndReplyAiTalk(
 
   const allMissions = params.missions || [];
   const completedSet = new Set(params.previouslyCompletedMissions || []);
-  const pendingMissions = allMissions.filter(m => !completedSet.has(m.id));
+  const pendingMissions = allMissions.filter(m => !completedSet.has(getMissionId(m)));
 
   const lastUserMessage = [...params.messages].reverse().find(m => m.role === 'user')?.content || '';
 
   const missionsListStr = allMissions
-    .map((m, idx) => `  ${idx + 1}. [${m.id}] ${m.goal} (Hints: ${(m.hints || []).join(', ') || 'None'})`)
+    .map((m, idx) => `  ${idx + 1}. [${getMissionId(m)}] ${getMissionGoal(m)} (Hints: ${(m.hints || []).join(', ') || 'None'})`)
     .join('\n');
 
   const pendingListStr = pendingMissions.length > 0
-    ? pendingMissions.map(m => `  - [${m.id}] ${m.goal}`).join('\n')
+    ? pendingMissions.map(m => `  - [${getMissionId(m)}] ${getMissionGoal(m)}`).join('\n')
     : '  (All target missions have been achieved!)';
 
   const completedListStr = params.previouslyCompletedMissions.length > 0
@@ -164,6 +172,7 @@ OUTPUT FORMAT: Strict JSON matching this schema:
           ...conversationHistory,
         ],
         temperature: 0.5,
+        max_tokens: 500,
         response_format: { type: 'json_object' },
       }),
     });
@@ -315,7 +324,7 @@ OUTPUT FORMAT: Strict JSON matching this schema:
       evaluation,
       debug_log: {
         latency_ms: latencyMs,
-        pending_before: pendingMissions.map(m => m.id),
+        pending_before: pendingMissions.map(getMissionId),
         new_completed: newlyDone,
         turn_deduction: turnDeduction,
         focus_penalty: focusPenalty,
@@ -401,6 +410,7 @@ Respond ONLY with that sentence. Do not add quotes, markdown, or explanation.`;
           { role: 'user', content: 'Suggest what I should say.' },
         ],
         temperature: 0.5,
+        max_tokens: 150,
       }),
     });
 

@@ -4,7 +4,8 @@ CREATE TABLE ai_talk_sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,                        -- ID phiên dạng số tự tăng (nhẹ & nhanh)
   user_id INTEGER NOT NULL,                                    -- ID người dùng từ JWT
   profile_id INTEGER,                                          -- ID hồ sơ người học (nếu có)
-  scenario_id TEXT NOT NULL REFERENCES ai_talk_scenarios(id) ON DELETE RESTRICT,
+  scenario_id TEXT NOT NULL,                                   -- Mã kịch bản (do client quản lý)
+  scenario_snapshot TEXT,                                       -- JSON snapshot cấu hình kịch bản do client gửi khi tạo session
   status TEXT NOT NULL DEFAULT 'in_progress',                  -- 'in_progress' | 'completed' | 'failed' | 'abandoned'
   turns_count INTEGER NOT NULL DEFAULT 0 CHECK (turns_count >= 0), -- Số lượt người học đã nói
   max_turns INTEGER NOT NULL DEFAULT 10 CHECK (max_turns > 0), -- Giới hạn số lượt của phiên

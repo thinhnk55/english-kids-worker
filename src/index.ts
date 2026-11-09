@@ -1,4 +1,3 @@
-import { handleGetCatalog } from './features/catalog/handlers.ts';
 import { routeAdminRequest } from './routes/admin.ts';
 import { routeUserRequest } from './routes/user.ts';
 import { requireAdmin, requireUser } from './utils/auth.ts';
@@ -20,7 +19,6 @@ export default {
         name: 'english-kids-worker',
         version: '2.0.0',
         api: {
-          public: '/v1/catalogs',
           admin: '/v1/admin',
           user: '/v1/my',
         },
@@ -30,13 +28,6 @@ export default {
           'Access-Control-Allow-Origin': origin || '*',
         },
       });
-    }
-
-    // Public published catalogs (no auth required for lightning speed)
-    if (pathname.startsWith('/v1/catalogs/')) {
-      const key = decodeURIComponent(pathname.slice('/v1/catalogs/'.length));
-      if (request.method !== 'GET') return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-      return handleGetCatalog(key, env, origin);
     }
 
     // Admin routes

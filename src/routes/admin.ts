@@ -1,18 +1,4 @@
 import {
-  handleCreateAdminCategory,
-  handleDeleteAdminCategory,
-  handleListAdminCategories,
-  handleUpdateAdminCategory,
-} from '../features/ai-talk/category/handlers.ts';
-import {
-  handleCreateAdminScenario,
-  handleDeleteAdminScenario,
-  handleGetAdminScenario,
-  handleListAdminScenarios,
-  handlePublishAiTalkCatalog,
-  handleUpdateAdminScenario,
-} from '../features/ai-talk/scenario/handlers.ts';
-import {
   handleDeleteAdminSession,
   handleGetAdminSession,
   handleListAdminSessions,
@@ -26,43 +12,6 @@ export async function routeAdminRequest(
   pathname: string,
 ): Promise<Response> {
   const method = request.method;
-
-  // --- Publish Catalog ---
-  if (pathname === '/v1/admin/ai-talk/publish') {
-    if (method === 'POST') return handlePublishAiTalkCatalog(env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  // --- Categories ---
-  if (pathname === '/v1/admin/ai-talk/categories') {
-    if (method === 'GET') return handleListAdminCategories(env, origin);
-    if (method === 'POST') return handleCreateAdminCategory(request, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  const categoryMatch = pathname.match(/^\/v1\/admin\/ai-talk\/categories\/([^/]+)$/);
-  if (categoryMatch) {
-    const code = decodeURIComponent(categoryMatch[1]);
-    if (method === 'PUT') return handleUpdateAdminCategory(request, code, env, origin);
-    if (method === 'DELETE') return handleDeleteAdminCategory(code, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  // --- Scenarios ---
-  if (pathname === '/v1/admin/ai-talk/scenarios') {
-    if (method === 'GET') return handleListAdminScenarios(env, origin);
-    if (method === 'POST') return handleCreateAdminScenario(request, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
-
-  const scenarioMatch = pathname.match(/^\/v1\/admin\/ai-talk\/scenarios\/([^/]+)$/);
-  if (scenarioMatch) {
-    const id = decodeURIComponent(scenarioMatch[1]);
-    if (method === 'GET') return handleGetAdminScenario(id, env, origin);
-    if (method === 'PUT') return handleUpdateAdminScenario(request, id, env, origin);
-    if (method === 'DELETE') return handleDeleteAdminScenario(id, env, origin);
-    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
-  }
 
   // --- Sessions (Admin view / manage) ---
   if (pathname === '/v1/admin/ai-talk/sessions') {

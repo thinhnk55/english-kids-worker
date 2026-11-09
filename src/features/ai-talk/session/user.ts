@@ -1,3 +1,4 @@
+import { deductUserCredit } from '../../credit/handlers.ts';
 import { evaluateAndReplyAiTalk, generateDynamicHint } from '../../../services/llm.ts';
 import { transcribeAudio } from '../../../services/stt.ts';
 import { synthesizeSpeech } from '../../../services/tts.ts';
@@ -12,56 +13,39 @@ export async function handleStartSession(
   origin: string,
 ): Promise<Response> {
   const body = await request.json().catch(() => null) as {
+    scenario?: AiTalkScenario;
+    scenario_snapshot?: AiTalkScenario | string;
     scenario_id?: string;
     profile_id?: number;
   } | null;
 
-  if (!body || !body.scenario_id || typeof body.scenario_id !== 'string') {
-    return errorResponse(400, 'VALIDATION_ERROR', 'Mã tình huống (scenario_id) là bắt buộc', origin);
+  if (!body) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'Dữ liệu không hợp lệ', origin);
   }
 
-  const scenarioId = body.scenario_id.trim();
-  const profileId = typeof body.profile_id === 'number' ? body.profile_id : null;
-
-  // 1. Ưu tiên tìm trong published catalog
+  // Lấy dữ liệu cấu hình kịch bản do client gửi lên
   let scenario: AiTalkScenario | null = null;
-  const catalogRow = await env.DB.prepare(
-    'SELECT payload FROM published_catalogs WHERE key = ?',
-  )
-    .bind('ai_talk_catalog')
-    .first<{ payload: string }>();
-
-  if (catalogRow?.payload) {
-    const catalogJson = safeJsonParse<{ data?: { scenarios?: AiTalkScenario[] } }>(catalogRow.payload, {});
-    const found = catalogJson.data?.scenarios?.find(s => s.id === scenarioId);
-    if (found) {
-      scenario = {
-        ...found,
-        missions: typeof found.missions === 'string' ? safeJsonParse(found.missions, []) : (found.missions ?? []),
-      };
-    }
+  if (body.scenario && typeof body.scenario === 'object') {
+    scenario = body.scenario;
+  } else if (body.scenario_snapshot) {
+    scenario = typeof body.scenario_snapshot === 'string'
+      ? safeJsonParse<AiTalkScenario | null>(body.scenario_snapshot, null)
+      : body.scenario_snapshot;
   }
 
-  // 2. Dự phòng tìm trong bảng nháp ai_talk_scenarios
-  if (!scenario) {
-    const fromDb = await env.DB.prepare(
-      'SELECT * FROM ai_talk_scenarios WHERE id = ?',
-    )
-      .bind(scenarioId)
-      .first<AiTalkScenario>();
-
-    if (fromDb) {
-      scenario = {
-        ...fromDb,
-        missions: typeof fromDb.missions === 'string' ? safeJsonParse(fromDb.missions, []) : (fromDb.missions ?? []),
-      };
-    }
+  if (!scenario || !scenario.id || !scenario.first_message) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'Thông tin kịch bản (scenario) không hợp lệ', origin);
   }
 
-  if (!scenario) {
-    return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy tình huống', origin);
+  // 1. Kiểm tra và trừ 1 credit rèn luyện của tài khoản
+  const creditDeduction = await deductUserCredit(env, userId, 1, 'start_ai_talk_session', scenario.id);
+  if (!creditDeduction.success) {
+    return errorResponse(402, 'PAYMENT_REQUIRED', 'Tài khoản đã hết lượt rèn luyện (credit). Vui lòng nạp thêm credit để tiếp tục!', origin);
   }
 
+  const scenarioId = scenario.id.trim();
+  const profileId = typeof body.profile_id === 'number' ? body.profile_id : null;
+  const maxTurns = Math.min(Math.max(Number(scenario.max_turns) || 10, 1), 15);
   const now = Math.floor(Date.now() / 1000);
 
   const initialMessages: ChatMessage[] = [
@@ -74,24 +58,28 @@ export async function handleStartSession(
 
   const session = await env.DB.prepare(
     `INSERT INTO ai_talk_sessions (
-       user_id, profile_id, scenario_id, status, turns_count, max_turns,
+       user_id, profile_id, scenario_id, scenario_snapshot, status, turns_count, max_turns,
        completed_missions, score, focus_score, messages, feedback, created_at, updated_at
      )
-     VALUES (?, ?, ?, 'in_progress', 0, ?, '[]', 100, 100, ?, NULL, ?, ?)
+     VALUES (?, ?, ?, ?, 'in_progress', 0, ?, '[]', 100, 100, ?, NULL, ?, ?)
      RETURNING *`,
   )
     .bind(
       userId,
       profileId,
       scenarioId,
-      scenario.max_turns,
+      JSON.stringify(scenario),
+      maxTurns,
       JSON.stringify(initialMessages),
       now,
       now,
     )
     .first<AiTalkSession>();
 
-  return successResponse(201, 'CREATED', formatSession(session), origin);
+  return successResponse(201, 'CREATED', {
+    ...formatSession(session),
+    remaining_credits: creditDeduction.remainingCredits,
+  }, origin);
 }
 
 export async function handleGetSession(
@@ -211,7 +199,7 @@ export async function handleGetMessageAudio(
   return await synthesizeSpeech(env, targetMsg.content, { voice: 'alloy', speed: 0.95 }, origin);
 }
 
-// Chuyển đổi văn bản tự do thành audio TTS (tiện lợi cho client phát thử)
+// Chuyển đổi văn bản tự do thành audio TTS
 export async function handleSynthesizeGeneralText(
   request: Request,
   env: Env,
@@ -265,41 +253,13 @@ async function executeTurn(
     return errorResponse(400, 'BAD_REQUEST', 'Đã đạt số lượt tối đa của bài luyện', origin);
   }
 
-  let scenario: AiTalkScenario | null = null;
-  const catalogRow = await env.DB.prepare(
-    'SELECT payload FROM published_catalogs WHERE key = ?',
-  )
-    .bind('ai_talk_catalog')
-    .first<{ payload: string }>();
-
-  if (catalogRow?.payload) {
-    const catalogJson = safeJsonParse<{ data?: { scenarios?: AiTalkScenario[] } }>(catalogRow.payload, {});
-    const found = catalogJson.data?.scenarios?.find(s => s.id === session.scenario_id);
-    if (found) {
-      scenario = {
-        ...found,
-        missions: typeof found.missions === 'string' ? safeJsonParse(found.missions, []) : (found.missions ?? []),
-      };
-    }
-  }
+  // Đọc snapshot cấu hình kịch bản trực tiếp từ session
+  const scenario: AiTalkScenario | null = session.scenario_snapshot
+    ? safeJsonParse<AiTalkScenario | null>(session.scenario_snapshot, null)
+    : null;
 
   if (!scenario) {
-    const fromDb = await env.DB.prepare(
-      'SELECT * FROM ai_talk_scenarios WHERE id = ?',
-    )
-      .bind(session.scenario_id)
-      .first<AiTalkScenario>();
-
-    if (fromDb) {
-      scenario = {
-        ...fromDb,
-        missions: typeof fromDb.missions === 'string' ? safeJsonParse(fromDb.missions, []) : (fromDb.missions ?? []),
-      };
-    }
-  }
-
-  if (!scenario) {
-    return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy tình huống của phiên này', origin);
+    return errorResponse(500, 'INTERNAL_ERROR', 'Không tìm thấy snapshot kịch bản của phiên', origin);
   }
 
   const existingMessages: ChatMessage[] = typeof session.messages === 'string'
@@ -312,7 +272,7 @@ async function executeTurn(
 
   const missionsList: AiTalkMission[] = typeof scenario.missions === 'string'
     ? safeJsonParse(scenario.missions, [])
-    : scenario.missions;
+    : (scenario.missions ?? []);
 
   const userMsg: ChatMessage = {
     role: 'user',
@@ -338,7 +298,7 @@ async function executeTurn(
     currentCompetencyScore,
   });
 
-  // Attach per-message feedback directly to the user's message
+  // Gắn kết quả đánh giá chi tiết vào tin nhắn của user
   userMsg.feedback = turnResult.feedback;
 
   const assistantMsg: ChatMessage = {
@@ -348,9 +308,9 @@ async function executeTurn(
   };
   updatedMessages.push(assistantMsg);
 
-  // Focus Score (anti-derailment / session retention) calculation
-  const penalty = turnResult.feedback?.relevance?.penalty ?? 0;
-  const newFocusScore = Math.max(0, currentFocusScore + penalty);
+  // Thanh năng lượng Focus (0 - 100)
+  const focusPenalty = turnResult.feedback?.focus_penalty ?? 0;
+  const newFocusScore = Math.max(0, currentFocusScore + focusPenalty);
 
   const newTurnsCount = session.turns_count + 1;
   const now = Math.floor(Date.now() / 1000);
@@ -391,7 +351,6 @@ async function executeTurn(
       improvements: ['Hãy phản hồi nhanh và đi thẳng vào mục tiêu cần đạt'],
     });
   } else {
-    // Progressive competency score estimate
     finalCompetencyScore = turnResult.performance_score ?? session.score;
     if (turnResult.evaluation) {
       finalFeedbackPayload = JSON.stringify(turnResult.evaluation);
@@ -429,6 +388,9 @@ export function formatSession(session: AiTalkSession | null | undefined) {
   if (!session) return null;
   return {
     ...session,
+    scenario_snapshot: typeof session.scenario_snapshot === 'string'
+      ? safeJsonParse(session.scenario_snapshot, null)
+      : session.scenario_snapshot,
     completed_missions: typeof session.completed_missions === 'string'
       ? safeJsonParse(session.completed_missions, [])
       : session.completed_missions,
@@ -457,37 +419,22 @@ export async function handleGetSessionHint(
     return errorResponse(404, 'NOT_FOUND', 'Không tìm thấy phiên', origin);
   }
 
-  let scenario: AiTalkScenario | null = null;
-  const catalogRow = await env.DB.prepare(
-    'SELECT payload FROM published_catalogs WHERE key = ?',
-  )
-    .bind('ai_talk_catalog')
-    .first<{ payload: string }>();
-
-  if (catalogRow?.payload) {
-    const catalogJson = safeJsonParse<{ data?: { scenarios?: AiTalkScenario[] } }>(catalogRow.payload, {});
-    const found = catalogJson.data?.scenarios?.find(s => s.id === session.scenario_id);
-    if (found) scenario = found;
-  }
-
-  if (!scenario) {
-    scenario = await env.DB.prepare('SELECT * FROM ai_talk_scenarios WHERE id = ?')
-      .bind(session.scenario_id)
-      .first<AiTalkScenario>();
-  }
+  const scenario: AiTalkScenario | null = session.scenario_snapshot
+    ? safeJsonParse<AiTalkScenario | null>(session.scenario_snapshot, null)
+    : null;
 
   const messages = safeJsonParse<ChatMessage[]>(session.messages as string, []);
   const completedMissions = safeJsonParse<string[]>(session.completed_missions as string, []);
   const missions = scenario ? (typeof scenario.missions === 'string' ? safeJsonParse<AiTalkMission[]>(scenario.missions, []) : (scenario.missions ?? [])) : [];
 
-  const nextMission = missions.find(m => !completedMissions.includes(m.code || (m as any).id));
+  const nextMission = missions.find(m => !completedMissions.includes((m.id || m.code || '')));
   const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant')?.content || '';
 
   const hint = await generateDynamicHint(env, {
     situation: scenario?.situation || 'General conversation',
     aiRole: scenario?.ai_role || 'Tutor',
     userRole: scenario?.user_role || 'Student',
-    nextMissionGoal: nextMission ? ((nextMission as any).goal || nextMission.text) : undefined,
+    nextMissionGoal: nextMission ? (nextMission.goal || nextMission.text) : undefined,
     lastAssistantMessage: lastAssistantMsg,
   });
 

@@ -8,6 +8,7 @@ import {
   handleStartSession,
   handleSynthesizeGeneralText,
 } from '../features/ai-talk/session/user.ts';
+import { handleGetMyCredits } from '../features/credit/handlers.ts';
 import {
   handleCreateProfile,
   handleDeleteProfile,
@@ -29,6 +30,12 @@ export async function routeUserRequest(
   }
 
   const method = request.method;
+
+  // --- Credits ---
+  if (pathname === '/v1/my/credits') {
+    if (method === 'GET') return handleGetMyCredits(userId, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
 
   // --- Profiles ---
   if (pathname === '/v1/my/profiles') {
