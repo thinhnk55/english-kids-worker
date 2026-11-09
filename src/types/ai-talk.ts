@@ -24,6 +24,33 @@ export interface AiTalkScenario {
 }
 
 export interface ChatMessageFeedback {
+  // 1 lần sai ngữ pháp chính tả trừ 10 điểm
+  has_accuracy_error: boolean;
+  accuracy_issue?: string;
+
+  // 1 lần chưa tự nhiên trừ 5 điểm
+  is_unnatural: boolean;
+  naturalness_suggestion?: string;
+
+  // 1 lần nội dung không liên quan chủ đề trừ 10 điểm
+  is_off_topic: boolean;
+  off_topic_reason?: string;
+  off_topic_severity?: 'slight' | 'complete' | 'intentional';
+
+  // Tổng điểm năng lực bị trừ ở lượt này (mắc đồng thời nhiều lỗi thì cộng dồn)
+  turn_deduction: number;
+  deductions: Array<{
+    rule: string;
+    points: number;
+    detail?: string;
+  }>;
+
+  // Trừ vào thanh năng lượng Focus (xanh - vàng - đỏ) chống lạc đề (0, -10, -25, -35)
+  focus_penalty: number;
+
+  praise?: string;
+
+  // Tương thích ngược
   accuracy?: {
     is_correct: boolean;
     issue?: string;
@@ -36,9 +63,6 @@ export interface ChatMessageFeedback {
   naturalness?: {
     suggestion?: string;
   };
-  praise?: string;
-  grammar?: string;
-  suggestion?: string;
 }
 
 export interface ChatMessage {

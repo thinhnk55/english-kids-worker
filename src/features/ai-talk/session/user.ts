@@ -77,7 +77,7 @@ export async function handleStartSession(
        user_id, profile_id, scenario_id, status, turns_count, max_turns,
        completed_missions, score, focus_score, messages, feedback, created_at, updated_at
      )
-     VALUES (?, ?, ?, 'in_progress', 0, ?, '[]', NULL, 100, ?, NULL, ?, ?)
+     VALUES (?, ?, ?, 'in_progress', 0, ?, '[]', 100, 100, ?, NULL, ?, ?)
      RETURNING *`,
   )
     .bind(
@@ -322,6 +322,7 @@ async function executeTurn(
   const updatedMessages = [...existingMessages, userMsg];
 
   const currentFocusScore = typeof session.focus_score === 'number' ? session.focus_score : 100;
+  const currentCompetencyScore = typeof session.score === 'number' ? session.score : 100;
 
   const turnResult = await evaluateAndReplyAiTalk(env, {
     situation: scenario.situation,
@@ -334,6 +335,7 @@ async function executeTurn(
     turnsCount: session.turns_count,
     maxTurns: session.max_turns,
     currentFocusScore,
+    currentCompetencyScore,
   });
 
   // Attach per-message feedback directly to the user's message
