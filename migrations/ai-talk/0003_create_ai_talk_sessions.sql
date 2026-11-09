@@ -9,7 +9,8 @@ CREATE TABLE ai_talk_sessions (
   turns_count INTEGER NOT NULL DEFAULT 0 CHECK (turns_count >= 0), -- Số lượt người học đã nói
   max_turns INTEGER NOT NULL DEFAULT 10 CHECK (max_turns > 0), -- Giới hạn số lượt của phiên
   completed_missions TEXT NOT NULL DEFAULT '[]',               -- JSON array mã mục tiêu đã đạt: ["flavor", "size"]
-  score INTEGER,                                               -- Điểm số đánh giá phiên rèn luyện (vd: 0 - 100)
+  score INTEGER,                                               -- Điểm số đánh giá năng lực thực tế (vd: 0 - 100)
+  focus_score INTEGER DEFAULT 100,                             -- Điểm tập trung duy trì phiên (chống lạc đề: 100 -> 0)
   messages TEXT NOT NULL DEFAULT '[]',                         -- JSON array toàn bộ tin nhắn qua lại giữa bé và AI
   feedback TEXT,                                               -- Đánh giá, khen ngợi và gợi ý cải thiện ngôn ngữ sau khi kết thúc
   created_at INTEGER NOT NULL,                                 -- Unix timestamp bắt đầu phiên
