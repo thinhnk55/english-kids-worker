@@ -172,7 +172,7 @@ export async function handleCreateProfile(
       `INSERT INTO parent (user_id, default_profile, max_profiles, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET
-         default_profile = COALESCE(parent.default_profile, excluded.default_profile),
+         default_profile = COALESCE(default_profile, excluded.default_profile),
          updated_at = excluded.updated_at`,
     )
       .bind(userId, insert.id, maxProfiles, now, now)
