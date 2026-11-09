@@ -67,3 +67,11 @@ export interface AiTalkSession {
   completed_missions?: string[];
   feedback?: any;
 }
+
+export interface AiTalkProfileScenario {
+  profile_id: number;
+  scenario_id: string;
+  meta: string | Record<string, any> | null;
+  created_at: number;
+  updated_at: number;
+}

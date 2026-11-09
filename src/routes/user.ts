@@ -1,4 +1,9 @@
 import { handleListCategories } from '../features/ai-talk/category/handlers.ts';
+import {
+  handleGetProfileScenario,
+  handleListProfileScenarios,
+  handleUpsertProfileScenario,
+} from '../features/ai-talk/profile-scenario/handlers.ts';
 import { handleListScenarios } from '../features/ai-talk/scenario/handlers.ts';
 import {
   handleGetSession,
@@ -55,6 +60,22 @@ export async function routeUserRequest(
   // --- Categories (Danh mục kịch bản phân cấp) ---
   if (pathname === '/v1/my/ai-talk/categories' || pathname === '/v1/ai-talk/categories') {
     if (method === 'GET') return handleListCategories(request, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  // --- Profile Scenarios (Tiến độ & thống kê theo từng scenario cho profile) ---
+  if (pathname === '/v1/my/ai-talk/profile-scenarios' || pathname === '/v1/ai-talk/profile-scenarios') {
+    if (method === 'GET') return handleListProfileScenarios(request, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  const profileScenarioMatch = pathname.match(/^\/v1\/(?:my\/)?ai-talk\/profile-scenarios\/([^/]+)$/);
+  if (profileScenarioMatch) {
+    const scenarioId = decodeURIComponent(profileScenarioMatch[1]);
+    const url = new URL(request.url);
+    const profileId = Number(url.searchParams.get('profile_id')) || 1;
+    if (method === 'GET') return handleGetProfileScenario(profileId, scenarioId, env, origin);
+    if (method === 'PUT' || method === 'POST') return handleUpsertProfileScenario(request, scenarioId, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
