@@ -17,8 +17,11 @@ import { handleGetMyCredits } from '../features/credit/handlers.ts';
 import {
   handleCreateProfile,
   handleDeleteProfile,
+  handleGetParent,
   handleListProfiles,
+  handleSetParentPasscode,
   handleUpdateProfile,
+  handleVerifyParentPasscode,
 } from '../features/profile/handlers.ts';
 import { errorResponse } from '../utils/response.ts';
 
@@ -39,6 +42,22 @@ export async function routeUserRequest(
   // --- Credits ---
   if (pathname === '/v1/my/credits') {
     if (method === 'GET') return handleGetMyCredits(userId, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  // --- Parent & Passcode ---
+  if (pathname === '/v1/my/parent') {
+    if (method === 'GET') return handleGetParent(userId, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  if (pathname === '/v1/my/parent/passcode') {
+    if (method === 'POST' || method === 'PUT') return handleSetParentPasscode(request, userId, env, origin);
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
+  }
+
+  if (pathname === '/v1/my/parent/verify-passcode') {
+    if (method === 'POST') return handleVerifyParentPasscode(request, userId, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);
   }
 
@@ -92,7 +111,12 @@ export async function routeUserRequest(
   }
 
   // --- AI Talk Sessions List & Start ---
-  if (pathname === '/v1/my/ai-talk/sessions' || pathname === '/v1/ai-talk/sessions' || pathname === '/v1/ai-talk/sessions/start' || pathname === '/v1/my/ai-talk/sessions/start') {
+  if (
+    pathname === '/v1/my/ai-talk/sessions' ||
+    pathname === '/v1/ai-talk/sessions' ||
+    pathname === '/v1/ai-talk/sessions/start' ||
+    pathname === '/v1/my/ai-talk/sessions/start'
+  ) {
     if (method === 'GET') return handleListProfileSessions(request, userId, env, origin);
     if (method === 'POST') return handleStartSession(request, userId, env, origin);
     return errorResponse(405, 'METHOD_NOT_ALLOWED', undefined, origin);

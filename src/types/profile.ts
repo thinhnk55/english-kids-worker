@@ -9,3 +9,11 @@ export interface EnglishKidsProfile {
   created_at: number;
   updated_at: number;
 }
+
+export interface EnglishKidsParent {
+  user_id: number;
+  pass_code: string | null;
+  max_profiles: number;
+  created_at: number;
+  updated_at: number;
+}
