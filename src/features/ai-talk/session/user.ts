@@ -1,4 +1,3 @@
-import { deductUserCredit } from '../../credit/handlers.ts';
 import { callLlmCompletion } from '../../../services/llm.ts';
 import type { AiTalkScenarioRow, AiTalkSession, ChatMessage, SessionMeta } from '../../../types/ai-talk.ts';
 import { safeJsonParse } from '../../../utils/json.ts';
@@ -32,19 +31,12 @@ export async function handleStartSession(
 
   // Tra cứu thông tin scenario từ bảng ai_talk_scenarios
   const scenarioRow = await env.DB.prepare(
-    'SELECT code, name, category, credit_cost, max_turns FROM ai_talk_scenarios WHERE code = ?',
+    'SELECT code, name, category, max_turns FROM ai_talk_scenarios WHERE code = ?',
   )
     .bind(cleanCode)
     .first<AiTalkScenarioRow>();
 
-  const creditCost = scenarioRow?.credit_cost ?? 1;
   const maxTurn = scenarioRow?.max_turns ?? (Math.min(Math.max(Number(body?.max_turns || body?.max_turn) || 10, 1), 25));
-
-  // Kiểm tra và trừ credit theo cấu hình của scenario
-  const creditDeduction = await deductUserCredit(env, userId, creditCost, 'start_ai_talk_session', cleanCode);
-  if (!creditDeduction.success) {
-    return errorResponse(402, 'PAYMENT_REQUIRED', `Tài khoản cần tối thiểu ${creditCost} credit để luyện tập kịch bản này!`, origin);
-  }
 
   const profileId = typeof body?.profile_id === 'number' ? body.profile_id : null;
   const initialEnergy = typeof body?.energy === 'number' ? body.energy : 3;
@@ -91,10 +83,7 @@ export async function handleStartSession(
     )
     .first<AiTalkSession>();
 
-  return successResponse(201, 'CREATED', {
-    ...formatSession(session),
-    remaining_credits: creditDeduction.remainingCredits,
-  }, origin);
+  return successResponse(201, 'CREATED', formatSession(session), origin);
 }
 
 export async function handleGetSession(
